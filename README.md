@@ -1,7 +1,10 @@
-# FlexAgent Java Adapter
+# FlexAgent
+> Lightweight Java Agent Runtime Adapter for LangChain4j and OpenAI-compatible models.
 
 [![CI Build](https://github.com/your-username/flexagent/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/flexagent/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://img.shields.io/badge/Java-17%2B-blue)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-v0.1.0--SNAPSHOT-orange)](https://img.shields.io/badge/version-v0.1.0--SNAPSHOT-orange)
 
 FlexAgent 是一个轻量级 Java Agent Runtime 适配层，用于解耦业务工具与底层模型运行时，优先支持 LangChain4j、OpenAI-compatible 模型与推理流解析。
 
