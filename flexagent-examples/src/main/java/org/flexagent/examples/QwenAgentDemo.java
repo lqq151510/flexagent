@@ -8,18 +8,18 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
-public class DeepSeekAgentDemo {
+public class QwenAgentDemo {
 
-    public static class WeatherTools {
-        @Tool("获取指定城市的当前天气情况")
-        public String getWeather(@P("city") String city) {
-            System.out.println("\n[Tool execution] WeatherTools.getWeather called with city: " + city);
-            return city + "的天气是 22℃，晴转多云，微风。";
+    public static class CalculatorTools {
+        @Tool("计算商品在指定折扣后的最终售价")
+        public double calculateDiscountedPrice(@P("originalPrice") double originalPrice, @P("discountRate") double discountRate) {
+            System.out.println("\n[Tool execution] CalculatorTools.calculateDiscountedPrice called with: " + originalPrice + ", discountRate: " + discountRate);
+            return originalPrice * discountRate;
         }
     }
 
     public static void main(String[] args) {
-        System.out.println("=== FlexAgent Java Adapter Demo (DeepSeek) ===");
+        System.out.println("=== FlexAgent Java Adapter Demo (Qwen) ===");
 
         // 1. SPI Diagnostic
         String type = "langchain4j";
@@ -50,38 +50,42 @@ public class DeepSeekAgentDemo {
         }
 
         // 2. Check API Key
-        String apiKey = System.getenv("DEEPSEEK_API_KEY");
-        if (apiKey == null || apiKey.isEmpty() || apiKey.equals("mock-key")) {
-            System.out.println("\n[提示] 未检测到有效的 DEEPSEEK_API_KEY 环境变量。");
-            System.out.println("请在终端中运行以下命令以执行真实的远程大模型调用：");
-            System.out.println("  export DEEPSEEK_API_KEY=\"你的_DEEPSEEK_API_KEY\"");
-            System.out.println("  mvn -pl flexagent-examples exec:java -Dexec.mainClass=\"org.flexagent.examples.DeepSeekAgentDemo\"");
+        String apiKey = System.getenv("QWEN_API_KEY");
+        if (apiKey == null || apiKey.isEmpty()) {
+            apiKey = System.getenv("DASHSCOPE_API_KEY");
+        }
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            System.out.println("\n[提示] 未检测到有效的 QWEN_API_KEY 或 DASHSCOPE_API_KEY 环境变量。");
+            System.out.println("请在终端中运行以下命令以执行真实的千问大模型调用：");
+            System.out.println("  export QWEN_API_KEY=\"你的_DASHSCOPE_API_KEY\"");
+            System.out.println("  mvn -pl flexagent-examples exec:java -Dexec.mainClass=\"org.flexagent.examples.QwenAgentDemo\"");
             return;
         }
 
-        System.out.println("DEEPSEEK_API_KEY is configured. Launching real LLM interaction...\n");
+        System.out.println("QWEN_API_KEY is configured. Launching real LLM interaction...\n");
 
-        // 3. Setup LangChain4j model
-        OpenAiChatModel deepSeekModel = OpenAiChatModel.builder()
-                .baseUrl("https://api.deepseek.com/v1")
+        // 3. Setup LangChain4j model (Using Qwen compatible OpenAI endpoint)
+        OpenAiChatModel qwenModel = OpenAiChatModel.builder()
+                .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
                 .apiKey(apiKey)
-                .modelName("deepseek-reasoner") // R1 推理思维链大模型
+                .modelName("qwen-plus") // 通义千问模型
                 .build();
 
         // 4. Wrap with FlexAgentChatModel
         FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
-                .delegateModel(deepSeekModel)
-                .thinkingMode(ThinkingMode.XML_THINK_TAG)          // R1 思考标签拦截提取
-                .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)        // 容错回退机制
-                .compactionStrategy(new SlidingWindowCompactionStrategy(5)) // 窗口上下文裁剪
-                .addToolObject(new WeatherTools())
+                .delegateModel(qwenModel)
+                .thinkingMode(ThinkingMode.NONE)                    // 千问非推理版不需要 xml think tag 提取
+                .toolCallPolicy(ToolCallPolicy.LENIENT)              // 宽容解析策略
+                .compactionStrategy(new SlidingWindowCompactionStrategy(5))
+                .addToolObject(new CalculatorTools())
                 .build();
 
         // 5. Run user query triggering a tool call
-        String prompt = "北京天气怎么样？获取完后请写出一首有关此时北京的诗。";
+        String prompt = "一件原价 299 元的外套打 85 折后的价格是多少？";
         System.out.println("User: " + prompt);
         System.out.println("--- Model Output & Execution Trace ---");
-        
+
         try {
             String response = agentModel.generate(prompt);
             System.out.println("\nAssistant: " + response);

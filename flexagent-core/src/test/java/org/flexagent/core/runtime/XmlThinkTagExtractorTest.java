@@ -95,4 +95,54 @@ public class XmlThinkTagExtractorTest {
         assertTrue(events.get(3) instanceof TextDelta);
         assertEquals("Text two", ((TextDelta) events.get(3)).text());
     }
+
+    // New Test Scenario 1: Strict complete tag extraction matching
+    @Test
+    public void testCompleteTagsMatching() {
+        XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
+        List<AgentEvent> events = extractor.extract("<think>abc</think>answer");
+        assertEquals(2, events.size());
+        assertEquals("abc", ((ThinkingDelta) events.get(0)).text());
+        assertEquals("answer", ((TextDelta) events.get(1)).text());
+    }
+
+    // New Test Scenario 2: Tag cut into small pieces: <thi + nk>abc</thi + nk>answer
+    @Test
+    public void testExtremelyFragmentedTags() {
+        XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
+        
+        assertTrue(extractor.extract("<thi").isEmpty());
+        
+        List<AgentEvent> e1 = extractor.extract("nk>abc</thi");
+        assertEquals(1, e1.size());
+        assertEquals("abc", ((ThinkingDelta) e1.get(0)).text());
+        
+        List<AgentEvent> e2 = extractor.extract("nk>answer");
+        assertEquals(1, e2.size());
+        assertEquals("answer", ((TextDelta) e2.get(0)).text());
+    }
+
+    // New Test Scenario 3: Multiple chunk streaming updates: <think>a + b + c</think> + answer
+    @Test
+    public void testMultiChunkStreamingReasoning() {
+        XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
+        
+        assertTrue(extractor.extract("<think>").isEmpty());
+        
+        List<AgentEvent> e1 = extractor.extract("a");
+        assertEquals(1, e1.size());
+        assertEquals("a", ((ThinkingDelta) e1.get(0)).text());
+
+        List<AgentEvent> e2 = extractor.extract("b");
+        assertEquals(1, e2.size());
+        assertEquals("b", ((ThinkingDelta) e2.get(0)).text());
+
+        List<AgentEvent> e3 = extractor.extract("c</think>");
+        assertEquals(1, e3.size());
+        assertEquals("c", ((ThinkingDelta) e3.get(0)).text());
+
+        List<AgentEvent> e4 = extractor.extract("answer");
+        assertEquals(1, e4.size());
+        assertEquals("answer", ((TextDelta) e4.get(0)).text());
+    }
 }

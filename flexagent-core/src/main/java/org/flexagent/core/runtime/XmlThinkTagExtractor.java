@@ -48,7 +48,9 @@ public class XmlThinkTagExtractor implements ThinkingExtractor {
                         break; // Wait for the remaining characters
                     } else {
                         // No full or partial tag, emit all as TextDelta
-                        events.add(new TextDelta(text));
+                        if (!text.isEmpty()) {
+                            events.add(new TextDelta(text));
+                        }
                         buffer.setLength(0);
                         break;
                     }
@@ -75,7 +77,9 @@ public class XmlThinkTagExtractor implements ThinkingExtractor {
                         break; // Wait for remaining characters
                     } else {
                         // No full or partial end tag, emit all as ThinkingDelta
-                        events.add(new ThinkingDelta(text));
+                        if (!text.isEmpty()) {
+                            events.add(new ThinkingDelta(text));
+                        }
                         buffer.setLength(0);
                         break;
                     }
