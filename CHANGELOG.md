@@ -4,6 +4,23 @@
 
 ---
 
+## [0.2.0] - 2026-05-27
+
+### 🚀 新增特性与重构
+* **生命周期常驻重构**：`FlexAgentChatModel` 继承 `AutoCloseable`，将 SPI 加载及 `AgentRuntime` 的初始化工作移至构造函数，避免在每次调用 `generate()` 时重复初始化和销毁 Runtime 带来的性能与上下文丢失问题。
+* **极简 Builder API 链式注入**：简化了 Builder 链式调用 API，支持 `.runtime(RuntimeTypes.LANGCHAIN4J)`、`.model(delegateModel)`、`.tools(tool1, tool2)`、`.enableThinkingExtraction(true)` 等极简配置形式。
+* **推理模型智能自动探测**：若 modelName 或底座 model 实例名称中包含 `"reasoner"` 或 `"r1"`，则自动开启 `XML_THINK_TAG` 状态机以抽取剥离推理流的 `<think>` 标签。
+* **标准化自定义异常体系**：引入 `FlexAgentException` 及其具体子类：
+  * `ProviderNotFoundException`：在 classpath 中找不到对应 SPI 运行时或发现重复冲突时抛出，提供明确的 classpath 排障动作指引。
+  * `RuntimeInitializationException`：当运行时连接或后端底层初始化（如 WebSocket 连接或 Harness 进程拉起）失败时抛出。
+  * `ToolInvocationException`：工具反射调用发生异常时抛出。
+
+### 🛠️ 测试与示例对齐
+* **全面对齐示例**：更新了 `DeepSeekAgentDemo`、`QwenAgentDemo`、`OllamaReasoningDemo` 以适配 v0.2.0 常驻生命周期的 AutoCloseable 用法和极简 Builder。
+* **单元/集成测试补齐**：编写了 `FlexAgentExceptionTest` 验证异常层级与消息传输；编写了 `FlexAgentChatModelBuilderTest` 验证 Builder API 参数解析和推理模型自动探测逻辑。
+
+---
+
 ## [0.1.0-SNAPSHOT] - 2026-05-27
 
 ### 🚀 新增特性

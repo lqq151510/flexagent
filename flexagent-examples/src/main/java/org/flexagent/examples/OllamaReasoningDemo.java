@@ -1,7 +1,7 @@
 package org.flexagent.examples;
 
-import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.runtime.RuntimeTypes;
 import org.flexagent.langchain4j.FlexAgentChatModel;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
@@ -25,7 +25,7 @@ public class OllamaReasoningDemo {
         System.out.println("=== FlexAgent Java Adapter Demo (Ollama) ===");
 
         // 1. SPI Diagnostic
-        String type = "langchain4j";
+        String type = RuntimeTypes.LANGCHAIN4J;
         boolean hasProvider = false;
         try {
             java.util.ServiceLoader<org.flexagent.core.runtime.AgentRuntimeProvider> loader =
@@ -78,21 +78,21 @@ public class OllamaReasoningDemo {
                 .modelName(modelName)
                 .build();
 
-        // 4. Wrap with FlexAgentChatModel
-        FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
-                .delegateModel(ollamaModel)
-                .thinkingMode(ThinkingMode.XML_THINK_TAG)          // 本地 R1 推理模型开启标签拦截
+        // 4. Wrap with FlexAgentChatModel using v0.2.0 API
+        try (FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(ollamaModel)
+                .modelName(modelName)                                // 推理模型名会自动启动 R1 思考拦截
                 .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)        // 容错回退机制
                 .compactionStrategy(new SlidingWindowCompactionStrategy(5))
-                .addToolObject(new DatabaseTools())
-                .build();
+                .tools(new DatabaseTools())
+                .build()) {
 
-        // 5. Run user query triggering a tool call
-        String prompt = "查询用户 ID 为 1001 的基本信息，获取后向他打个招呼。";
-        System.out.println("User: " + prompt);
-        System.out.println("--- Model Output & Execution Trace ---");
+            // 5. Run user query triggering a tool call
+            String prompt = "查询用户 ID 为 1001 的基本信息，获取后向他打个招呼。";
+            System.out.println("User: " + prompt);
+            System.out.println("--- Model Output & Execution Trace ---");
 
-        try {
             String response = agentModel.generate(prompt);
             System.out.println("\nAssistant: " + response);
             System.out.println("\nAssistant: Done.");

@@ -1,7 +1,7 @@
 package org.flexagent.examples;
 
-import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.runtime.RuntimeTypes;
 import org.flexagent.langchain4j.FlexAgentChatModel;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
@@ -22,7 +22,7 @@ public class DeepSeekAgentDemo {
         System.out.println("=== FlexAgent Java Adapter Demo (DeepSeek) ===");
 
         // 1. SPI Diagnostic
-        String type = "langchain4j";
+        String type = RuntimeTypes.LANGCHAIN4J;
         boolean hasProvider = false;
         try {
             java.util.ServiceLoader<org.flexagent.core.runtime.AgentRuntimeProvider> loader =
@@ -68,21 +68,21 @@ public class DeepSeekAgentDemo {
                 .modelName("deepseek-reasoner") // R1 推理思维链大模型
                 .build();
 
-        // 4. Wrap with FlexAgentChatModel
-        FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
-                .delegateModel(deepSeekModel)
-                .thinkingMode(ThinkingMode.XML_THINK_TAG)          // R1 思考标签拦截提取
+        // 4. Wrap with FlexAgentChatModel using v0.2.0 API
+        try (FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(deepSeekModel)
+                .modelName("deepseek-reasoner")                      // R1 思考标签会根据模型名自动启用推理流拦截提取
                 .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)        // 容错回退机制
                 .compactionStrategy(new SlidingWindowCompactionStrategy(5)) // 窗口上下文裁剪
-                .addToolObject(new WeatherTools())
-                .build();
+                .tools(new WeatherTools())
+                .build()) {
 
-        // 5. Run user query triggering a tool call
-        String prompt = "北京天气怎么样？获取完后请写出一首有关此时北京的诗。";
-        System.out.println("User: " + prompt);
-        System.out.println("--- Model Output & Execution Trace ---");
-        
-        try {
+            // 5. Run user query triggering a tool call
+            String prompt = "北京天气怎么样？获取完后请写出一首有关此时北京的诗。";
+            System.out.println("User: " + prompt);
+            System.out.println("--- Model Output & Execution Trace ---");
+            
             String response = agentModel.generate(prompt);
             System.out.println("\nAssistant: " + response);
             System.out.println("\nAssistant: Done.");

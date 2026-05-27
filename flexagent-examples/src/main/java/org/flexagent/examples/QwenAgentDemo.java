@@ -1,7 +1,7 @@
 package org.flexagent.examples;
 
-import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.runtime.RuntimeTypes;
 import org.flexagent.langchain4j.FlexAgentChatModel;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
@@ -22,7 +22,7 @@ public class QwenAgentDemo {
         System.out.println("=== FlexAgent Java Adapter Demo (Qwen) ===");
 
         // 1. SPI Diagnostic
-        String type = "langchain4j";
+        String type = RuntimeTypes.LANGCHAIN4J;
         boolean hasProvider = false;
         try {
             java.util.ServiceLoader<org.flexagent.core.runtime.AgentRuntimeProvider> loader =
@@ -72,21 +72,21 @@ public class QwenAgentDemo {
                 .modelName("qwen-plus") // 通义千问模型
                 .build();
 
-        // 4. Wrap with FlexAgentChatModel
-        FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
-                .delegateModel(qwenModel)
-                .thinkingMode(ThinkingMode.NONE)                    // 千问非推理版不需要 xml think tag 提取
+        // 4. Wrap with FlexAgentChatModel using v0.2.0 API
+        try (FlexAgentChatModel agentModel = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(qwenModel)
+                .modelName("qwen-plus")
                 .toolCallPolicy(ToolCallPolicy.LENIENT)              // 宽容解析策略
                 .compactionStrategy(new SlidingWindowCompactionStrategy(5))
-                .addToolObject(new CalculatorTools())
-                .build();
+                .tools(new CalculatorTools())
+                .build()) {
 
-        // 5. Run user query triggering a tool call
-        String prompt = "一件原价 299 元的外套打 85 折后的价格是多少？";
-        System.out.println("User: " + prompt);
-        System.out.println("--- Model Output & Execution Trace ---");
+            // 5. Run user query triggering a tool call
+            String prompt = "一件原价 299 元的外套打 85 折后的价格是多少？";
+            System.out.println("User: " + prompt);
+            System.out.println("--- Model Output & Execution Trace ---");
 
-        try {
             String response = agentModel.generate(prompt);
             System.out.println("\nAssistant: " + response);
             System.out.println("\nAssistant: Done.");

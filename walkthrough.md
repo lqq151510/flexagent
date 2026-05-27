@@ -1,8 +1,42 @@
-# FlexAgent Java Adapter 开源发布交付报告
+# FlexAgent Java Adapter 开源发布与开发体验重构报告 (v0.2.0)
 
-我们已成功完成对 **FlexAgent Java Adapter** 的架构解耦、工程化容错机制实现以及发布准备工作。目前所有测试已全部编译并运行成功，项目具备了开源发布的品质。
+我们已成功完成对 **FlexAgent Java Adapter** 从 v0.1.0 到 v0.2.0 的全面升级。本次升级聚焦于**常驻生命周期重构**（解决重复初始化问题）、**极简 Builder API 设计**（极大提升开发体验）、**推理模型智能探测**以及**标准化自定义异常体系的构建**。
 
 ---
+
+## v0.2.0 重大更新与交付成果
+
+### 1. 常驻 Runtime 生命周期重构
+为了解决 v0.1.0 中每次调用 `generate()` 都会重新加载 SPI 并销毁重建 `AgentRuntime` 的性能和会话上下文丢失的缺陷：
+* 使 `FlexAgentChatModel` 实现了 `AutoCloseable` 接口。
+* 在构造函数中，通过 SPI 加载并对 `AgentRuntime` 进行一次性初始化，且在整个生命周期中持久保持该 Runtime 连接。
+* 在 `generate()` 中直接复用长驻的运行时实例，多轮生成性能提升数倍，并支持底层运行时维护对话会话状态与历史消息的裁剪。
+* 在 `close()` 方法被调用时释放连接、网络资源和 Harness 进程。
+
+### 2. 极简开发体验的 Builder API
+重构并精简了 Builder，开发者无需手动关心 `AgentRuntimeConfig`、`ServiceLoader` 等繁杂概念，能够像使用原生大模型客户端一样快速创建智能体：
+```java
+FlexAgentChatModel agent = FlexAgentChatModel.builder()
+        .runtime(RuntimeTypes.LANGCHAIN4J)
+        .model(delegateModel)
+        .tools(new CalculatorTools())
+        .enableThinkingExtraction(true)
+        .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)
+        .build();
+```
+
+### 3. 推理模型智能自动探测与 `<think>` 提取
+* 在不匹配底层大模型具体实现时，若 `modelName` 或底座大模型类的具体实例名称（通过反射尝试获取 `modelName()` 或 `getModelName()`）包含 `"reasoner"` 或 `"r1"`，则自动开启 `XML_THINK_TAG` 状态机模式，无需用户手动配置。
+
+### 4. 标准化的自定义异常体系
+设计并交付了专用的异常树体系（继承自 `FlexAgentException`），替换了原来粗糙的系统级异常，提高开发者调试排障效率：
+* **`ProviderNotFoundException`**：当 SPI 在 classpath 找不到匹配的适配器模块或检测到冲突时抛出，并在报错信息中提供极其明确的 Maven 依赖排障动作指南。
+* **`RuntimeInitializationException`**：当网络连接或底层 Harness 进程加载失败时抛出。
+* **`ToolInvocationException`**：工具反射执行出错时抛出。
+
+---
+
+## 历史 v0.1.0 交付成果回顾
 
 ## 交付成果一览
 
