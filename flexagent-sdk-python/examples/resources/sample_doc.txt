@@ -1,0 +1,2 @@
+This is a sample document for testing FlexAgent SDK multimodal capabilities.
+Secret number: 789456

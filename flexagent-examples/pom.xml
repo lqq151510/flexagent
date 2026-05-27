@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.flexagent</groupId>
+        <artifactId>flexagent-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>flexagent-examples</artifactId>
+    <packaging>jar</packaging>
+
+    <name>FlexAgent Java Examples</name>
+    <description>Demonstration and integration testing suite for the FlexAgent Java Adapter</description>
+
+    <dependencies>
+        <!-- LocalHarness Backend -->
+        <dependency>
+            <groupId>org.flexagent</groupId>
+            <artifactId>flexagent-localharness</artifactId>
+        </dependency>
+
+        <!-- LangChain4j Adapter -->
+        <dependency>
+            <groupId>org.flexagent</groupId>
+            <artifactId>flexagent-langchain4j</artifactId>
+        </dependency>
+
+        <!-- LangChain4j implementation -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

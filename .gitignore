@@ -1,0 +1,82 @@
+# OS Files
+.DS_Store
+Thumbs.db
+
+# JVM / Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# Maven release plugin
+release.properties
+pom.xml.releaseBackup
+pom.xml.tagSuffix
+pom.xml.nextVal
+pom.xml.backup
+pom.xml.rollback
+
+# IDEs and Editors
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.metadata/
+bin/
+tmp/
+out/
+.vscode/
+!.vscode/extensions.json
+.history/
+*.sublime-project
+*.sublime-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Python Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Log files and database
+*.log
+*.sqlite
+
+# Local configuration / user-specific files
+.gemini/
+localharness_desc.txt
