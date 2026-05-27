@@ -6,7 +6,7 @@
 
     <groupId>org.flexagent</groupId>
     <artifactId>flexagent-parent</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <packaging>pom</packaging>
 
     <name>FlexAgent Java SDK Parent</name>
@@ -16,6 +16,7 @@
         <module>flexagent-core</module>
         <module>flexagent-localharness</module>
         <module>flexagent-langchain4j</module>
+        <module>flexagent-spring-boot-starter</module>
         <module>flexagent-examples</module>
     </modules>
 
@@ -47,6 +48,11 @@
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-langchain4j</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-spring-boot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

@@ -30,12 +30,62 @@ public class ToolAdapter {
     private void register(Object obj) {
         toolObjects.add(obj);
         for (Method method : obj.getClass().getDeclaredMethods()) {
-            if (method.isAnnotationPresent(dev.langchain4j.agent.tool.Tool.class)) {
-                ToolSpecification spec = ToolSpecifications.toolSpecificationFrom(method);
-                String toolName = spec.name();
+            boolean isFlexTool = method.isAnnotationPresent(org.flexagent.core.tool.FlexTool.class);
+            boolean isLc4jTool = method.isAnnotationPresent(dev.langchain4j.agent.tool.Tool.class);
+            
+            if (isFlexTool || isLc4jTool) {
+                ToolSpecification spec;
+                String toolName;
+                if (isFlexTool) {
+                    org.flexagent.core.tool.FlexTool flexTool = method.getAnnotation(org.flexagent.core.tool.FlexTool.class);
+                    toolName = flexTool.name().isEmpty() ? flexTool.value() : flexTool.name();
+                    if (toolName.isEmpty()) {
+                        toolName = method.getName();
+                    }
+                    String description = flexTool.description();
+                    
+                    // Generate schema and convert to ToolSpecification
+                    String schemaJson = org.flexagent.core.tool.ToolSchemaGenerator.generateSchema(method);
+                    try {
+                        com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>> typeRef = 
+                                new com.fasterxml.jackson.core.type.TypeReference<>() {};
+                        Map<String, Object> schemaMap = mapper.readValue(schemaJson, typeRef);
+                        String schemaType = (String) schemaMap.getOrDefault("type", "object");
+                        Map<String, Object> rawProperties = (Map<String, Object>) schemaMap.get("properties");
+                        Map<String, Map<String, Object>> properties = new HashMap<>();
+                        if (rawProperties != null) {
+                            for (Map.Entry<String, Object> entry : rawProperties.entrySet()) {
+                                if (entry.getValue() instanceof Map) {
+                                    properties.put(entry.getKey(), (Map<String, Object>) entry.getValue());
+                                }
+                            }
+                        }
+                        List<String> required = (List<String>) schemaMap.get("required");
+                        
+                        dev.langchain4j.agent.tool.ToolParameters toolParams = dev.langchain4j.agent.tool.ToolParameters.builder()
+                                .type(schemaType)
+                                .properties(properties)
+                                .required(required != null ? required : Collections.emptyList())
+                                .build();
+                        
+                        spec = ToolSpecification.builder()
+                                .name(toolName)
+                                .description(description)
+                                .parameters(toolParams)
+                                .build();
+                    } catch (Exception e) {
+                        log.error("Failed to build ToolSpecification for FlexTool method: {}", method.getName(), e);
+                        continue;
+                    }
+                    log.info("Registered FlexTool: {} from class {}", toolName, obj.getClass().getSimpleName());
+                } else {
+                    spec = ToolSpecifications.toolSpecificationFrom(method);
+                    toolName = spec.name();
+                    log.info("Registered LangChain4j Tool: {} from class {}", toolName, obj.getClass().getSimpleName());
+                }
+                
                 method.setAccessible(true);
                 registry.put(toolName, new ToolMethodInfo(obj, method, spec));
-                log.info("Registered LangChain4j Tool: {} from class {}", toolName, obj.getClass().getSimpleName());
             }
         }
     }
@@ -46,7 +96,13 @@ public class ToolAdapter {
             String paramsSchema = "{}";
             if (info.spec.parameters() != null) {
                 try {
-                    paramsSchema = mapper.writeValueAsString(info.spec.parameters());
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("type", info.spec.parameters().type());
+                    map.put("properties", info.spec.parameters().properties());
+                    if (info.spec.parameters().required() != null && !info.spec.parameters().required().isEmpty()) {
+                        map.put("required", info.spec.parameters().required());
+                    }
+                    paramsSchema = mapper.writeValueAsString(map);
                 } catch (Exception e) {
                     log.warn("Failed to serialize parameters schema for tool: {}", info.spec.name(), e);
                 }
@@ -85,8 +141,17 @@ public class ToolAdapter {
         
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
+            org.flexagent.core.tool.FlexParam flexParam = param.getAnnotation(org.flexagent.core.tool.FlexParam.class);
             dev.langchain4j.agent.tool.P pAnn = param.getAnnotation(dev.langchain4j.agent.tool.P.class);
-            String name = (pAnn != null) ? pAnn.value() : param.getName();
+            String name = null;
+            if (flexParam != null) {
+                name = flexParam.name().isEmpty() ? flexParam.value() : flexParam.name();
+            } else if (pAnn != null) {
+                name = pAnn.value();
+            }
+            if (name == null || name.isEmpty()) {
+                name = param.getName();
+            }
             // Find parameter description from spec or fallback to matching by index/position if needed
             // LangChain4j spec doesn't store parameter mapping directly, but we can look up in the JSON arguments map
             // Since -parameters compiler flag is standard, we look up by parameter name first.

@@ -234,6 +234,10 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return this.activeRuntime;
     }
 
+    public List<Object> toolObjects() {
+        return this.toolObjects;
+    }
+
     public static class Builder {
         private String binaryPath;
         private String storageDirectory;

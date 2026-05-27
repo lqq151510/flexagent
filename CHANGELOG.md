@@ -2,6 +2,24 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [0.3.0] - 2026-05-27
+
+### 🚀 新增特性与重构
+* **完全独立的原生注解**：新增原生工具注解 `@FlexTool` 和参数注解 `@FlexParam`，完全解耦 LangChain4j 等第三方工具注解，实现了核心层的完全自治。
+* **双注解兼容性适配**：重构 `ToolAdapter` 以同时扫描并识别 `@FlexTool` 与 LangChain4j 的 `@Tool`（降级兼容），确保平滑无痛迁移。
+* **Jackson 原生 JSON Schema 生成**：新增 `ToolSchemaGenerator` 与 `FlexToolScanner`，绕过 LangChain4j 工具参数提取，自主生成完美的标准参数描述。
+* **官方 Spring Boot Starter 支持**：交付了 `flexagent-spring-boot-starter` 起步依赖模块：
+  * 支持以 `flexagent` 为前缀的配置项（映射至 `FlexAgentProperties` 绑定）。
+  * 核心自动配置类 `FlexAgentAutoConfiguration` 负责挂载 `FlexAgentChatModel` 并从容器 `ApplicationContext` 自动扫描带有 `@FlexTool` 方法的 Beans 注入为 Tools。
+  * 采用 Spring Boot 3.x 标准自动配置 imports 规范。
+
+### 🛠️ 测试与示例对齐
+* **自动化测试覆盖**：
+  * `FlexToolScannerTest` 和 `ToolSchemaGeneratorTest` 覆盖原生工具扫描与 JSON Schema 正确性验证。
+  * `LangChain4jToolCompatibilityTest` 验证双注解的无缝过渡和兼容。
+  * `SpringBootAutoConfigurationTest` 覆盖轻量 Spring 上下文的属性解析及 Bean 工具自动装配行为。
+* **Spring Boot 示例程序**：新增 `SpringDemoApplication` 与 `AgentController` (REST 终点 `/chat`)，完整展示如何在 Web 开发中秒级接入 FlexAgent。
+
 ---
 
 ## [0.2.0] - 2026-05-27
