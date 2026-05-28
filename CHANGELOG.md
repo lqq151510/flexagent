@@ -2,6 +2,18 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [0.5.0] - 2026-05-28
+
+### 🧠 Session Memory 与上下文压缩
+* 新增 `AgentMemory` / `AgentMessage` / `AgentSessionContext` 等会话记忆基础能力，为多轮对话提供跨请求历史保存与 session 隔离。
+* 新增 `InMemoryAgentMemory` 默认实现，支持无外部依赖的本地内存记忆。
+* 新增 `CompactionStrategy` 及其策略实现，支持 `SlidingWindowCompactionStrategy`、`SummaryCompactionStrategy` 和 `ToolAwareCompactionStrategy`。
+* `FlexAgentChatModel.Builder` 新增 `memory(...)` 与 `compactionMaxMessages(...)` 等配置入口，保持不配置时的无状态兼容行为。
+
+### 📖 文档与验证
+* 新增会话记忆快速开始文档与上下文压缩示例文档。
+* 新增记忆与压缩相关单元测试，确保 `mvn clean test` 可稳定通过。
+
 ## [0.3.0] - 2026-05-27
 
 ### 🚀 新增特性与重构

@@ -4,7 +4,7 @@
 [![CI Build](https://github.com/your-username/flexagent/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/flexagent/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://img.shields.io/badge/Java-17%2B-blue)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.1.0--SNAPSHOT-orange)](https://img.shields.io/badge/version-v0.1.0--SNAPSHOT-orange)
+[![Version](https://img.shields.io/badge/version-v0.5.0-blue)](https://img.shields.io/badge/version-v0.5.0-blue)
 
 FlexAgent 是一个轻量级 Java Agent Runtime 适配层，用于解耦业务工具与底层模型运行时，优先支持 LangChain4j、OpenAI-compatible 模型与推理流解析。
 
@@ -65,5 +65,6 @@ mvn -pl flexagent-examples exec:java -Dexec.mainClass="org.flexagent.examples.De
 ## 📖 相关文档
 
 * **设计思想与框架对比**：[FlexAgent vs LangChain4j vs Spring AI](docs/comparison-with-langchain4j-and-spring-ai.md)
+* **上下文压缩与长对话控制**：[Context Compaction](docs/examples/context-compaction.md)
 * **未来演进路线图**：[ROADMAP.md](ROADMAP.md)
 * **版本发布日志**：[CHANGELOG.md](CHANGELOG.md)

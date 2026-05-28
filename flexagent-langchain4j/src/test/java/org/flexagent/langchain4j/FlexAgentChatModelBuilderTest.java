@@ -6,10 +6,13 @@ import org.flexagent.core.runtime.RuntimeTypes;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,6 +32,21 @@ public class FlexAgentChatModelBuilderTest {
 
         @Override
         public Response<AiMessage> generate(List<ChatMessage> messages) {
+            return Response.from(AiMessage.from("Mock"));
+        }
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages, List<ToolSpecification> toolSpecifications) {
+            return generate(messages);
+        }
+    }
+
+    private static class CapturingModel implements ChatLanguageModel {
+        private List<ChatMessage> captured = new ArrayList<>();
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages) {
+            this.captured = new ArrayList<>(messages);
             return Response.from(AiMessage.from("Mock"));
         }
 
@@ -84,6 +102,31 @@ public class FlexAgentChatModelBuilderTest {
                 .modelName("deepseek-reasoner")
                 .build()) {
             // Success
+        }
+    }
+
+    @Test
+    public void testCompactionMaxMessagesBuilderShortcut() throws Exception {
+        CapturingModel model = new CapturingModel();
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(model)
+                .compactionMaxMessages(5)
+                .build()) {
+            assertNotNull(agent.activeRuntime());
+
+            List<ChatMessage> context = List.of(
+                    SystemMessage.from("System"),
+                    UserMessage.from("1"),
+                    AiMessage.from("2"),
+                    UserMessage.from("3"),
+                    AiMessage.from("4"),
+                    UserMessage.from("5")
+            );
+            Response<AiMessage> response = agent.generate(context);
+            assertEquals("Mock", response.content().text());
+            assertEquals(5, model.captured.size());
         }
     }
 }

@@ -12,14 +12,24 @@ import org.flexagent.core.exception.ProviderNotFoundException;
 import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.exception.FlexAgentException;
 import org.flexagent.langchain4j.compaction.CompactionStrategy;
+import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.output.Response;
+import org.flexagent.core.memory.AgentMemory;
+import org.flexagent.core.memory.AgentMessage;
+import org.flexagent.core.memory.AgentSessionContext;
+import org.flexagent.core.model.ToolCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.Map;
+import java.util.Collections;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final Logger log = LoggerFactory.getLogger(FlexAgentChatModel.class);
 
     private final String binaryPath;
@@ -43,6 +54,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
     private final ThinkingMode thinkingMode;
     private final ToolCallPolicy toolCallPolicy;
     private final CompactionStrategy compactionStrategy;
+    private final AgentMemory memory;
 
     // Persistent runtime and tool adapter
     private final AgentRuntime activeRuntime;
@@ -60,6 +72,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         this.thinkingMode = builder.thinkingMode;
         this.toolCallPolicy = builder.toolCallPolicy;
         this.compactionStrategy = builder.compactionStrategy;
+        this.memory = builder.memory;
 
         // Initialize persistent runtime and adapter
         try {
@@ -156,12 +169,38 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
         log.info("Generating response for prompt length: {}", prompt.length());
 
-        // Update conversation history dynamically for the persistent LangChain4j runtime
-        if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-            if (messages != null && messages.size() > 1) {
-                lc4jRuntime.setHistoryMessages(messages.subList(0, messages.size() - 1));
-            } else {
-                lc4jRuntime.setHistoryMessages(new ArrayList<>());
+        String sessionId = AgentSessionContext.get();
+        boolean hasMemory = (this.memory != null && sessionId != null);
+
+        if (hasMemory) {
+            List<AgentMessage> agentHistory = this.memory.getMessages(sessionId);
+            List<ChatMessage> chatHistory = new ArrayList<>();
+            if (agentHistory != null) {
+                for (AgentMessage am : agentHistory) {
+                    chatHistory.add(toChatMessage(am));
+                }
+            }
+
+            // Sync initial stateless history to memory if memory is empty
+            if (chatHistory.isEmpty() && messages != null && messages.size() > 1) {
+                List<ChatMessage> initialHistory = messages.subList(0, messages.size() - 1);
+                for (ChatMessage cm : initialHistory) {
+                    this.memory.addMessage(sessionId, toAgentMessage(cm));
+                    chatHistory.add(cm);
+                }
+            }
+
+            if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                lc4jRuntime.setHistoryMessages(chatHistory);
+            }
+        } else {
+            // Update conversation history dynamically for the persistent LangChain4j runtime
+            if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                if (messages != null && messages.size() > 1) {
+                    lc4jRuntime.setHistoryMessages(messages.subList(0, messages.size() - 1));
+                } else {
+                    lc4jRuntime.setHistoryMessages(new ArrayList<>());
+                }
             }
         }
 
@@ -211,6 +250,24 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             }
 
             AiMessage aiMessage = AiMessage.from(contentBuilder.toString());
+
+            // Save conversation history back to memory
+            if (hasMemory) {
+                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                    List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
+                    List<AgentMessage> updatedAgentMessages = new ArrayList<>();
+                    for (ChatMessage cm : updatedMessages) {
+                        updatedAgentMessages.add(toAgentMessage(cm));
+                    }
+                    this.memory.clear(sessionId);
+                    this.memory.addMessages(sessionId, updatedAgentMessages);
+                } else {
+                    // For non-langchain4j runtime, manually record user prompt and assistant response
+                    this.memory.addMessage(sessionId, AgentMessage.user(prompt));
+                    this.memory.addMessage(sessionId, AgentMessage.assistant(contentBuilder.toString()));
+                }
+            }
+
             return Response.from(aiMessage);
 
         } catch (FlexAgentException e) {
@@ -238,6 +295,100 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return this.toolObjects;
     }
 
+    public Response<AiMessage> generate(String sessionId, String userMessage) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return generate(List.of(UserMessage.from(userMessage)));
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    public Response<AiMessage> generate(String sessionId, List<ChatMessage> messages) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return generate(messages);
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    private ChatMessage toChatMessage(AgentMessage msg) {
+        if (msg == null) {
+            return null;
+        }
+        switch (msg.role()) {
+            case "system":
+                return SystemMessage.from(msg.text());
+            case "user":
+                return UserMessage.from(msg.text());
+            case "assistant":
+            case "ai":
+                if (msg.toolCalls() != null && !msg.toolCalls().isEmpty()) {
+                    List<dev.langchain4j.agent.tool.ToolExecutionRequest> requests = new ArrayList<>();
+                    for (ToolCall tc : msg.toolCalls()) {
+                        requests.add(dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+                                .id(tc.id())
+                                .name(tc.name())
+                                .arguments(tc.argumentsJson())
+                                .build());
+                    }
+                    if (msg.text() != null && !msg.text().isEmpty()) {
+                        return new AiMessage(msg.text(), requests);
+                    } else {
+                        return AiMessage.from(requests);
+                    }
+                }
+                return AiMessage.from(msg.text());
+            case "tool":
+                return ToolExecutionResultMessage.from(msg.toolId(), msg.toolName(), msg.text());
+            default:
+                throw new IllegalArgumentException("Unknown AgentMessage role: " + msg.role());
+        }
+    }
+
+    private AgentMessage toAgentMessage(ChatMessage msg) {
+        if (msg == null) {
+            return null;
+        }
+        if (msg instanceof SystemMessage) {
+            return AgentMessage.system(msg.text());
+        } else if (msg instanceof UserMessage) {
+            return AgentMessage.user(msg.text());
+        } else if (msg instanceof AiMessage aiMsg) {
+            if (aiMsg.hasToolExecutionRequests()) {
+                List<ToolCall> toolCalls = new ArrayList<>();
+                for (dev.langchain4j.agent.tool.ToolExecutionRequest req : aiMsg.toolExecutionRequests()) {
+                    toolCalls.add(new ToolCall(
+                            req.id(),
+                            req.name(),
+                            parseJsonToMap(req.arguments()),
+                            req.arguments(),
+                            null
+                    ));
+                }
+                return AgentMessage.assistant(aiMsg.text(), toolCalls);
+            }
+            return AgentMessage.assistant(aiMsg.text());
+        } else if (msg instanceof ToolExecutionResultMessage toolMsg) {
+            return AgentMessage.tool(toolMsg.id(), toolMsg.toolName(), toolMsg.text());
+        } else {
+            throw new IllegalArgumentException("Unknown ChatMessage type: " + msg.getClass().getName());
+        }
+    }
+
+    private Map<String, Object> parseJsonToMap(String json) {
+        if (json == null || json.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse tool call JSON arguments to Map", e);
+            return Collections.emptyMap();
+        }
+    }
+
     public static class Builder {
         private String binaryPath;
         private String storageDirectory;
@@ -250,10 +401,17 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         private ThinkingMode thinkingMode = ThinkingMode.NONE;
         private ToolCallPolicy toolCallPolicy = ToolCallPolicy.LENIENT;
         private CompactionStrategy compactionStrategy;
+        private AgentMemory memory;
+        private Integer compactionMaxMessages;
 
         // v0.2.0 Streamlined API options
         private String runtimeType;
         private Boolean enableThinkingExtraction;
+
+        public Builder memory(AgentMemory memory) {
+            this.memory = memory;
+            return this;
+        }
 
         public Builder binaryPath(String binaryPath) {
             this.binaryPath = binaryPath;
@@ -351,7 +509,16 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
+        public Builder compactionMaxMessages(int maxMessages) {
+            this.compactionMaxMessages = maxMessages;
+            return this;
+        }
+
         public FlexAgentChatModel build() {
+            if (this.compactionStrategy == null && this.compactionMaxMessages != null) {
+                this.compactionStrategy = new SlidingWindowCompactionStrategy(this.compactionMaxMessages);
+            }
+
             // Apply thinking extraction toggle
             if (this.enableThinkingExtraction != null) {
                 this.thinkingMode = this.enableThinkingExtraction ? ThinkingMode.XML_THINK_TAG : ThinkingMode.NONE;

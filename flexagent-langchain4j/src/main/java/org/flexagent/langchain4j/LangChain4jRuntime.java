@@ -59,6 +59,10 @@ public class LangChain4jRuntime implements AgentRuntime {
         }
     }
 
+    public List<ChatMessage> getChatMessages() {
+        return new ArrayList<>(this.chatMessages);
+    }
+
     @Override
     public Set<RuntimeCapability> capabilities() {
         return Set.of(
@@ -116,7 +120,9 @@ public class LangChain4jRuntime implements AgentRuntime {
                 List<ToolSpecification> toolSpecs = toolAdapter.getToolSpecifications();
                 Response<AiMessage> response;
                 
-                List<ChatMessage> compacted = compactionStrategy.compact(chatMessages);
+                List<ChatMessage> compacted = compactionStrategy.shouldCompact(chatMessages)
+                        ? compactionStrategy.compact(chatMessages)
+                        : new ArrayList<>(chatMessages);
                 log.info("Invoking LangChain4j delegate model (compacted context size: {})...", compacted.size());
                 if (toolSpecs != null && !toolSpecs.isEmpty()) {
                     response = model.generate(compacted, toolSpecs);

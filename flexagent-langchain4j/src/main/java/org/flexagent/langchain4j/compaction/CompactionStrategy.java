@@ -11,4 +11,14 @@ public interface CompactionStrategy {
      * @return The compacted messages.
      */
     List<ChatMessage> compact(List<ChatMessage> messages);
+
+    /**
+     * Indicates whether the current context should be compacted.
+     *
+     * @param messages The current messages.
+     * @return true if compaction should run, otherwise false.
+     */
+    default boolean shouldCompact(List<ChatMessage> messages) {
+        return false;
+    }
 }

@@ -12,4 +12,9 @@ public class NoopCompactionStrategy implements CompactionStrategy {
         }
         return new ArrayList<>(messages);
     }
+
+    @Override
+    public boolean shouldCompact(List<ChatMessage> messages) {
+        return false;
+    }
 }
