@@ -104,7 +104,8 @@ public class FlexAgentChatModelTest {
         assertNotNull(response.content());
         
         String text = response.content().text();
-        assertTrue(text.contains("Fallback to text"), "Should fallback to normal text if JSON fails to parse under TEXT_FALLBACK");
+        assertTrue(text.contains("Tool Call Fallback"), "Should fallback to normal text if JSON fails to parse under TEXT_FALLBACK");
+        assertTrue(text.contains("call-fail"));
     }
 
     @Test
@@ -213,9 +214,11 @@ public class FlexAgentChatModelTest {
                 .addToolObject(new Calculator())
                 .build();
 
-        assertThrows(RuntimeException.class, () -> {
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> {
             model.generate(List.of(new UserMessage("This should throw exception")));
         });
+        assertTrue(ex.getMessage().contains("Failed to parse tool call arguments"));
+        assertTrue(ex.getMessage().contains("STRICT"));
     }
 
     @Test

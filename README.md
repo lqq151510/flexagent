@@ -51,6 +51,19 @@ mvn -pl flexagent-examples exec:java -Dexec.mainClass="org.flexagent.examples.De
 * **推理 `<think>` 标签流式回溯解析**：针对 DeepSeek-R1 等推理模型，在流式接收过程中通过内置状态机精准分段剥离 `ThinkingDelta` 与 `TextDelta`，无惧网络分片导致的标签切碎或未闭合。
 * **ToolCall 容灾策略**：内置 `STRICT`、`LENIENT` 和 `TEXT_FALLBACK` 策略，轻松应对模型生成的 JSON 幻觉和破碎参数输出。
 
+### 极简 Builder 示例
+
+```java
+try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+        .langChain4j(delegateModel)
+        .tools(new MyTools())
+        .lenientToolCalls()
+        .enableThinkingExtraction(true)
+        .build()) {
+    String answer = agent.generate("帮我调用工具完成任务");
+}
+```
+
 ---
 
 ## 🛠️ 项目结构 (Modules)

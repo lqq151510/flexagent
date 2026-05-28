@@ -2,6 +2,7 @@ package org.flexagent.langchain4j;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.flexagent.core.exception.ToolCallParsingException;
 import org.flexagent.core.model.*;
 import org.flexagent.core.runtime.AgentConfig;
 import org.flexagent.core.runtime.AgentRuntime;
@@ -211,41 +212,33 @@ public class LangChain4jRuntime implements AgentRuntime {
 
                 // 3. Process custom tools execution requests
                 if (aiMessage.hasToolExecutionRequests()) {
-                    boolean hasJsonError = false;
+                    ToolCallParsingException fallbackError = null;
                     List<String> repairedArguments = new ArrayList<>();
                     
                     for (dev.langchain4j.agent.tool.ToolExecutionRequest req : aiMessage.toolExecutionRequests()) {
                         String args = req.arguments();
                         if (args != null && !args.trim().isEmpty()) {
                             try {
-                                objectMapper.readTree(args);
-                                repairedArguments.add(args);
-                            } catch (Exception e) {
-                                ToolCallPolicy policy = toolCallPolicy();
-                                if (policy == ToolCallPolicy.STRICT) {
-                                    throw new IllegalArgumentException("Invalid JSON detected in tool arguments under STRICT policy: " + args, e);
-                                } else if (policy == ToolCallPolicy.LENIENT) {
-                                    log.info("Lenient policy: attempting to repair invalid JSON arguments: {}", args);
-                                    String repaired = tryRepairJson(args);
-                                    try {
-                                        objectMapper.readTree(repaired);
-                                        repairedArguments.add(repaired);
-                                        log.info("Successfully repaired invalid JSON to: {}", repaired);
-                                    } catch (Exception ex) {
-                                        throw new IllegalArgumentException("Failed to repair invalid JSON under LENIENT policy: " + args, ex);
-                                    }
-                                } else { // TEXT_FALLBACK
-                                    hasJsonError = true;
+                                repairedArguments.add(validateOrRepairArguments(req, args));
+                            } catch (ToolCallParsingException e) {
+                                if (toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
+                                    fallbackError = e;
                                     break;
                                 }
+                                throw e;
                             }
                         } else {
                             repairedArguments.add(args);
                         }
                     }
 
-                    if (hasJsonError && toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
+                    if (fallbackError != null && toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
                         log.info("Fallback policy triggered: converting tool call to plain text due to JSON parsing error.");
+                        String fallbackText = text;
+                        if (fallbackText == null || fallbackText.isBlank()) {
+                            fallbackText = "Tool call skipped because arguments were not valid JSON.";
+                        }
+                        fallbackText += "\n[Tool Call Fallback: " + fallbackError.getMessage() + "]";
                         Step fallbackStep = new Step(
                                 "trajectory-lc4j:" + stepIndex,
                                 stepIndex++,
@@ -253,8 +246,8 @@ public class LangChain4jRuntime implements AgentRuntime {
                                 StepSource.MODEL,
                                 StepTarget.USER,
                                 StepStatus.DONE,
-                                text + "\n[Tool Call Failed JSON Parsing: Fallback to text]",
-                                text + "\n[Tool Call Failed JSON Parsing: Fallback to text]",
+                                fallbackText,
+                                fallbackText,
                                 thinking,
                                 thinking,
                                 Collections.emptyList(),
@@ -420,6 +413,45 @@ public class LangChain4jRuntime implements AgentRuntime {
                 log.warn("Failed to parse tool execution request arguments JSON: {}", json, e);
             }
             return Collections.emptyMap();
+        }
+    }
+
+    private String validateOrRepairArguments(
+            dev.langchain4j.agent.tool.ToolExecutionRequest request,
+            String argumentsJson
+    ) {
+        try {
+            objectMapper.readTree(argumentsJson);
+            return argumentsJson;
+        } catch (Exception parseError) {
+            ToolCallPolicy policy = toolCallPolicy();
+            if (policy == ToolCallPolicy.STRICT || policy == ToolCallPolicy.TEXT_FALLBACK) {
+                throw new ToolCallParsingException(
+                        request.name(),
+                        request.id(),
+                        policy,
+                        argumentsJson,
+                        parseError.getMessage(),
+                        parseError
+                );
+            }
+
+            log.info("Lenient policy: attempting to repair invalid JSON arguments: {}", argumentsJson);
+            String repaired = tryRepairJson(argumentsJson);
+            try {
+                objectMapper.readTree(repaired);
+                log.info("Successfully repaired invalid JSON to: {}", repaired);
+                return repaired;
+            } catch (Exception repairError) {
+                throw new ToolCallParsingException(
+                        request.name(),
+                        request.id(),
+                        policy,
+                        argumentsJson,
+                        "lenient repair failed: " + repairError.getMessage(),
+                        repairError
+                );
+            }
         }
     }
 

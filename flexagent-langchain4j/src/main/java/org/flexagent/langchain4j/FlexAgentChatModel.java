@@ -497,6 +497,19 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
+        public Builder langChain4j(ChatLanguageModel model) {
+            this.runtimeType = RuntimeTypes.LANGCHAIN4J;
+            this.delegateModel = model;
+            return this;
+        }
+
+        public Builder localHarness(String binaryPath, String storageDirectory) {
+            this.runtimeType = RuntimeTypes.LOCAL_HARNESS;
+            this.binaryPath = binaryPath;
+            this.storageDirectory = storageDirectory;
+            return this;
+        }
+
         // v0.2.0 simplified thinking extractor toggle
         public Builder enableThinkingExtraction(boolean enable) {
             this.enableThinkingExtraction = enable;
@@ -505,6 +518,21 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
         public Builder toolCallPolicy(ToolCallPolicy toolCallPolicy) {
             this.toolCallPolicy = toolCallPolicy;
+            return this;
+        }
+
+        public Builder strictToolCalls() {
+            this.toolCallPolicy = ToolCallPolicy.STRICT;
+            return this;
+        }
+
+        public Builder lenientToolCalls() {
+            this.toolCallPolicy = ToolCallPolicy.LENIENT;
+            return this;
+        }
+
+        public Builder textFallbackToolCalls() {
+            this.toolCallPolicy = ToolCallPolicy.TEXT_FALLBACK;
             return this;
         }
 
@@ -529,6 +557,8 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
 
         public FlexAgentChatModel build() {
+            validate();
+
             if (this.compactionStrategy == null
                     && (this.compactionMaxMessages != null
                     || this.compactionMessageThreshold != null
@@ -577,6 +607,33 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             }
 
             return new FlexAgentChatModel(this);
+        }
+
+        private void validate() {
+            String selectedRuntime = this.runtimeType;
+            if (selectedRuntime == null || selectedRuntime.isBlank()) {
+                selectedRuntime = (this.binaryPath != null && !this.binaryPath.isBlank())
+                        ? RuntimeTypes.LOCAL_HARNESS
+                        : RuntimeTypes.LANGCHAIN4J;
+            }
+
+            if (this.customRuntime == null
+                    && RuntimeTypes.LANGCHAIN4J.equals(selectedRuntime)
+                    && this.delegateModel == null) {
+                throw new RuntimeInitializationException(
+                        selectedRuntime,
+                        "delegate model is required. Fix: call FlexAgentChatModel.builder().langChain4j(model) or .model(model)."
+                );
+            }
+
+            if (this.customRuntime == null
+                    && RuntimeTypes.LOCAL_HARNESS.equals(selectedRuntime)
+                    && (this.binaryPath == null || this.binaryPath.isBlank())) {
+                throw new RuntimeInitializationException(
+                        selectedRuntime,
+                        "binary path is required. Fix: call .localHarness(binaryPath, storageDirectory) or .binaryPath(path)."
+                );
+            }
         }
     }
 }

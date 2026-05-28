@@ -2,6 +2,7 @@ package org.flexagent.langchain4j;
 
 import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.runtime.RuntimeTypes;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
@@ -67,17 +68,40 @@ public class FlexAgentChatModelBuilderTest {
         ChatLanguageModel model = new MockModel("standard-model");
         
         try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
-                .runtime(RuntimeTypes.LANGCHAIN4J)
-                .model(model)
+                .langChain4j(model)
                 .tools(new SimpleTool())
                 .enableThinkingExtraction(true)
-                .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)
+                .textFallbackToolCalls()
                 .build()) {
             
             assertNotNull(agent.activeRuntime());
             // Verify thinking extraction toggled correctly
             String response = agent.generate("Hello");
             assertEquals("Mock", response);
+        }
+    }
+
+    @Test
+    public void testBuilderFailsFastWhenLangChain4jModelMissing() {
+        RuntimeInitializationException ex = assertThrows(RuntimeInitializationException.class, () ->
+                FlexAgentChatModel.builder()
+                        .runtime(RuntimeTypes.LANGCHAIN4J)
+                        .build()
+        );
+
+        assertTrue(ex.getMessage().contains("delegate model is required"));
+        assertTrue(ex.getMessage().contains(".langChain4j(model)"));
+    }
+
+    @Test
+    public void testToolCallPolicyShortcuts() throws Exception {
+        ChatLanguageModel model = new MockModel("standard-model");
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .langChain4j(model)
+                .strictToolCalls()
+                .build()) {
+            assertEquals(ToolCallPolicy.STRICT, agent.activeRuntime().toolCallPolicy());
         }
     }
 

@@ -1,5 +1,6 @@
 package org.flexagent.core.exception;
 
+import org.flexagent.core.model.ToolCallPolicy;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -44,6 +45,29 @@ public class FlexAgentExceptionTest {
         assertTrue(ex instanceof FlexAgentException);
         assertTrue(ex.getMessage().contains("Error executing tool"));
         assertTrue(ex.getMessage().contains("my-tool"));
+        assertEquals(cause, ex.getCause());
+    }
+
+    @Test
+    public void testToolCallParsingException() {
+        Throwable cause = new IllegalArgumentException("bad json");
+        ToolCallParsingException ex = new ToolCallParsingException(
+                "add",
+                "call-1",
+                ToolCallPolicy.STRICT,
+                "{a:1",
+                "bad json",
+                cause
+        );
+
+        assertTrue(ex instanceof FlexAgentException);
+        assertTrue(ex.getMessage().contains("add"));
+        assertTrue(ex.getMessage().contains("STRICT"));
+        assertTrue(ex.getMessage().contains("Fix:"));
+        assertEquals("add", ex.toolName());
+        assertEquals("call-1", ex.toolCallId());
+        assertEquals(ToolCallPolicy.STRICT, ex.policy());
+        assertEquals("{a:1", ex.argumentsJson());
         assertEquals(cause, ex.getCause());
     }
 }

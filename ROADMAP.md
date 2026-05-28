@@ -20,10 +20,10 @@
 ## 📌 v0.2: 开发者体验提升与完善
 * **目标**：简化配置方式，降低上手门槛，支持更丰富的异常处理和更多 OpenAI-compatible 端点。
 * **交付内容**：
-  * [ ] **极简 Builder API**：提供更便捷的实例化工具（例如 `FlexAgentChatModel.builder().tools(...).build()`）。
+  * [x] **极简 Builder API**：提供更便捷的实例化工具（例如 `FlexAgentChatModel.builder().langChain4j(model).tools(...).build()`）。
   * [ ] **Ollama & Qwen 示例细化**：在 Examples 中正式交付本地 Ollama 和阿里云千问的完整运行示例。
-  * [ ] **ToolCall 异常自愈**：完善 `ToolCallPolicy` 的容错策略与错误上报机制。
-  * [ ] **更清晰的异常链**：为 SPI 发现失败、WebSocket 连接丢失等场景提供带有一步修复指引的自定义异常。
+  * [x] **ToolCall 异常自愈**：完善 `ToolCallPolicy` 的容错策略与错误上报机制。
+  * [x] **更清晰的异常链**：为 Builder 误用、运行时初始化和 ToolCall 参数解析提供带有一步修复指引的自定义异常。
 
 ---
 
