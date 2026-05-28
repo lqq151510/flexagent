@@ -129,4 +129,27 @@ public class FlexAgentChatModelBuilderTest {
             assertEquals(5, model.captured.size());
         }
     }
+
+    @Test
+    public void testCompactionTokenThresholdBuilderShortcut() throws Exception {
+        CapturingModel model = new CapturingModel();
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(model)
+                .compactionMaxMessages(3)
+                .compactionMessageThreshold(100)
+                .compactionTokenThreshold(10)
+                .build()) {
+            List<ChatMessage> context = List.of(
+                    UserMessage.from("This is a very long first message."),
+                    AiMessage.from("This is a very long second message."),
+                    UserMessage.from("This is a very long third message."),
+                    AiMessage.from("This is a very long fourth message.")
+            );
+            Response<AiMessage> response = agent.generate(context);
+            assertEquals("Mock", response.content().text());
+            assertEquals(3, model.captured.size());
+        }
+    }
 }

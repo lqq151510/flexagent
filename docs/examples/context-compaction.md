@@ -45,6 +45,17 @@ FlexAgentChatModel model = FlexAgentChatModel.builder()
         .build();
 ```
 
+也可以通过 Builder 直接配置阈值触发（message/token）：
+
+```java
+FlexAgentChatModel model = FlexAgentChatModel.builder()
+        .model(delegateModel)
+        .compactionMaxMessages(8)         // 压缩后保留窗口
+        .compactionMessageThreshold(20)   // 超过 20 条消息触发
+        .compactionTokenThreshold(2000)   // 或估算 token 超过 2000 触发
+        .build();
+```
+
 ### Summary
 将较早的消息折叠成摘要系统消息，适合长对话保留任务状态。
 
@@ -53,7 +64,13 @@ import org.flexagent.langchain4j.compaction.SummaryCompactionStrategy;
 
 FlexAgentChatModel model = FlexAgentChatModel.builder()
         .model(delegateModel)
-        .compactionStrategy(new SummaryCompactionStrategy(10))
+        .compactionStrategy(new SummaryCompactionStrategy(
+                10,     // maxMessages
+                20,     // messageThreshold
+                2000,   // tokenThreshold
+                180,    // summaryMaxChars
+                2       // minTailMessages
+        ))
         .build();
 ```
 
@@ -65,7 +82,12 @@ import org.flexagent.langchain4j.compaction.ToolAwareCompactionStrategy;
 
 FlexAgentChatModel model = FlexAgentChatModel.builder()
         .model(delegateModel)
-        .compactionStrategy(new ToolAwareCompactionStrategy(12))
+        .compactionStrategy(new ToolAwareCompactionStrategy(
+                12,     // maxMessages
+                24,     // messageThreshold
+                2500,   // tokenThreshold
+                3       // maxToolMessagesToKeep
+        ))
         .build();
 ```
 
@@ -74,3 +96,4 @@ FlexAgentChatModel model = FlexAgentChatModel.builder()
 * 当消息数未超过阈值时，不会触发压缩。
 * 超过阈值后，Runtime 会在调用模型前自动压缩上下文。
 * 默认不配置 `compactionStrategy` 时，行为保持和原来一致。
+* Runtime 会输出压缩观测日志：`sessionId`、触发原因、压缩前后 message/token 数。

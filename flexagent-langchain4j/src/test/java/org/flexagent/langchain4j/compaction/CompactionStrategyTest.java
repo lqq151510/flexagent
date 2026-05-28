@@ -82,4 +82,40 @@ public class CompactionStrategyTest {
         NoopCompactionStrategy strategy = new NoopCompactionStrategy();
         assertFalse(strategy.shouldCompact(List.of(UserMessage.from("hello"))));
     }
+
+    @Test
+    void slidingWindowCanTriggerByTokenThreshold() {
+        SlidingWindowCompactionStrategy strategy = new SlidingWindowCompactionStrategy(3, 100, 10);
+
+        List<ChatMessage> messages = List.of(
+                UserMessage.from("This is a deliberately long message for token estimation."),
+                AiMessage.from("Another long assistant response to exceed token threshold."),
+                UserMessage.from("Third long message to trigger compaction by token count."),
+                AiMessage.from("Fourth long message that should be compacted.")
+        );
+
+        assertTrue(strategy.shouldCompact(messages));
+        assertEquals("token-threshold", strategy.compactionReason(messages));
+        List<ChatMessage> compacted = strategy.compact(messages);
+        assertEquals(3, compacted.size());
+    }
+
+    @Test
+    void toolAwareSupportsReservedToolMessageParameter() {
+        ToolAwareCompactionStrategy strategy = new ToolAwareCompactionStrategy(5, 5, null, 2);
+
+        List<ChatMessage> messages = List.of(
+                SystemMessage.from("System"),
+                UserMessage.from("u1"),
+                AiMessage.from("a1"),
+                ToolExecutionResultMessage.from("c1", "tool", "r1"),
+                ToolExecutionResultMessage.from("c2", "tool", "r2"),
+                ToolExecutionResultMessage.from("c3", "tool", "r3"),
+                UserMessage.from("u2")
+        );
+
+        List<ChatMessage> compacted = strategy.compact(messages);
+        long toolResultCount = compacted.stream().filter(m -> m instanceof ToolExecutionResultMessage).count();
+        assertEquals(2, toolResultCount);
+    }
 }

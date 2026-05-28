@@ -21,4 +21,27 @@ public interface CompactionStrategy {
     default boolean shouldCompact(List<ChatMessage> messages) {
         return false;
     }
+
+    /**
+     * Returns the reason for compaction decision.
+     */
+    default String compactionReason(List<ChatMessage> messages) {
+        return "no-threshold";
+    }
+
+    /**
+     * Returns an estimated token count for current context.
+     */
+    default int estimateTokenCount(List<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        int chars = 0;
+        for (ChatMessage message : messages) {
+            if (message != null && message.text() != null) {
+                chars += message.text().length();
+            }
+        }
+        return Math.max(1, (int) Math.ceil(chars / 4.0));
+    }
 }

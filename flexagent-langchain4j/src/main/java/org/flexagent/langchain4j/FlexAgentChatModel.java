@@ -192,6 +192,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
             if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
                 lc4jRuntime.setHistoryMessages(chatHistory);
+                lc4jRuntime.setSessionId(sessionId);
             }
         } else {
             // Update conversation history dynamically for the persistent LangChain4j runtime
@@ -201,6 +202,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                 } else {
                     lc4jRuntime.setHistoryMessages(new ArrayList<>());
                 }
+                lc4jRuntime.setSessionId(sessionId);
             }
         }
 
@@ -403,6 +405,8 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         private CompactionStrategy compactionStrategy;
         private AgentMemory memory;
         private Integer compactionMaxMessages;
+        private Integer compactionMessageThreshold;
+        private Integer compactionTokenThreshold;
 
         // v0.2.0 Streamlined API options
         private String runtimeType;
@@ -514,9 +518,30 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
+        public Builder compactionMessageThreshold(int messageThreshold) {
+            this.compactionMessageThreshold = messageThreshold;
+            return this;
+        }
+
+        public Builder compactionTokenThreshold(int tokenThreshold) {
+            this.compactionTokenThreshold = tokenThreshold;
+            return this;
+        }
+
         public FlexAgentChatModel build() {
-            if (this.compactionStrategy == null && this.compactionMaxMessages != null) {
-                this.compactionStrategy = new SlidingWindowCompactionStrategy(this.compactionMaxMessages);
+            if (this.compactionStrategy == null
+                    && (this.compactionMaxMessages != null
+                    || this.compactionMessageThreshold != null
+                    || this.compactionTokenThreshold != null)) {
+                int maxMessages = this.compactionMaxMessages != null ? this.compactionMaxMessages : 12;
+                Integer messageThreshold = this.compactionMessageThreshold != null
+                        ? this.compactionMessageThreshold
+                        : this.compactionMaxMessages;
+                this.compactionStrategy = new SlidingWindowCompactionStrategy(
+                        maxMessages,
+                        messageThreshold,
+                        this.compactionTokenThreshold
+                );
             }
 
             // Apply thinking extraction toggle

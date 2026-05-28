@@ -2,7 +2,7 @@ package org.flexagent.core.memory;
 
 import java.util.List;
 
-public interface AgentMemory {
+public interface AgentMemory extends AutoCloseable {
     List<AgentMessage> getMessages(String sessionId);
     void addMessage(String sessionId, AgentMessage message);
     default void addMessages(String sessionId, List<AgentMessage> messages) {
@@ -13,4 +13,9 @@ public interface AgentMemory {
         }
     }
     void clear(String sessionId);
+
+    @Override
+    default void close() throws Exception {
+        // default no-op
+    }
 }

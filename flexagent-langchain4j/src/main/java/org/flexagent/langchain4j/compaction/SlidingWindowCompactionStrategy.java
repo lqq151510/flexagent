@@ -5,10 +5,15 @@ import dev.langchain4j.data.message.SystemMessage;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SlidingWindowCompactionStrategy implements CompactionStrategy {
+public class SlidingWindowCompactionStrategy extends ThresholdCompactionStrategy {
     private final int maxMessages;
 
     public SlidingWindowCompactionStrategy(int maxMessages) {
+        this(maxMessages, maxMessages, null);
+    }
+
+    public SlidingWindowCompactionStrategy(int maxMessages, Integer messageThreshold, Integer tokenThreshold) {
+        super(messageThreshold, tokenThreshold);
         if (maxMessages < 2) {
             throw new IllegalArgumentException("maxMessages must be at least 2");
         }
@@ -44,10 +49,5 @@ public class SlidingWindowCompactionStrategy implements CompactionStrategy {
         }
 
         return result;
-    }
-
-    @Override
-    public boolean shouldCompact(List<ChatMessage> messages) {
-        return messages != null && messages.size() > maxMessages;
     }
 }

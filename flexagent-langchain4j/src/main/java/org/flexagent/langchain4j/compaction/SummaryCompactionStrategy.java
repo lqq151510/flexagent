@@ -13,14 +13,35 @@ import java.util.List;
  * A lightweight summary compaction strategy that preserves the latest conversation turns
  * while folding older content into a synthetic system summary.
  */
-public class SummaryCompactionStrategy implements CompactionStrategy {
+public class SummaryCompactionStrategy extends ThresholdCompactionStrategy {
     private final int maxMessages;
+    private final int summaryMaxChars;
+    private final int minTailMessages;
 
     public SummaryCompactionStrategy(int maxMessages) {
+        this(maxMessages, maxMessages, null, 120, 2);
+    }
+
+    public SummaryCompactionStrategy(
+            int maxMessages,
+            Integer messageThreshold,
+            Integer tokenThreshold,
+            int summaryMaxChars,
+            int minTailMessages
+    ) {
+        super(messageThreshold, tokenThreshold);
         if (maxMessages < 3) {
             throw new IllegalArgumentException("maxMessages must be at least 3");
         }
+        if (summaryMaxChars < 40) {
+            throw new IllegalArgumentException("summaryMaxChars must be at least 40");
+        }
+        if (minTailMessages < 1) {
+            throw new IllegalArgumentException("minTailMessages must be at least 1");
+        }
         this.maxMessages = maxMessages;
+        this.summaryMaxChars = summaryMaxChars;
+        this.minTailMessages = minTailMessages;
     }
 
     @Override
@@ -39,7 +60,7 @@ public class SummaryCompactionStrategy implements CompactionStrategy {
             }
         }
 
-        int tailSlots = Math.max(2, maxMessages - systems.size() - 1);
+        int tailSlots = Math.max(minTailMessages, maxMessages - systems.size() - 1);
         int startIdx = Math.max(0, messages.size() - tailSlots);
         for (int i = startIdx; i < messages.size(); i++) {
             ChatMessage msg = messages.get(i);
@@ -52,11 +73,6 @@ public class SummaryCompactionStrategy implements CompactionStrategy {
         result.add(SystemMessage.from(buildSummary(messages, startIdx)));
         result.addAll(tail);
         return result;
-    }
-
-    @Override
-    public boolean shouldCompact(List<ChatMessage> messages) {
-        return messages != null && messages.size() > maxMessages;
     }
 
     private String buildSummary(List<ChatMessage> messages, int startIdx) {
@@ -98,6 +114,8 @@ public class SummaryCompactionStrategy implements CompactionStrategy {
             return "";
         }
         String normalized = text.replaceAll("\\s+", " ").trim();
-        return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
+        return normalized.length() > summaryMaxChars
+                ? normalized.substring(0, summaryMaxChars) + "..."
+                : normalized;
     }
 }

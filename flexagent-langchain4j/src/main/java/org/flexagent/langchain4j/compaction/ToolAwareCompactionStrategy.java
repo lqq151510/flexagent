@@ -11,14 +11,29 @@ import java.util.List;
  * Prototype strategy that preserves tool execution result messages while applying
  * a sliding window to the remaining conversation turns.
  */
-public class ToolAwareCompactionStrategy implements CompactionStrategy {
+public class ToolAwareCompactionStrategy extends ThresholdCompactionStrategy {
     private final int maxMessages;
+    private final int maxToolMessagesToKeep;
 
     public ToolAwareCompactionStrategy(int maxMessages) {
+        this(maxMessages, maxMessages, null, Math.max(1, maxMessages / 3));
+    }
+
+    public ToolAwareCompactionStrategy(
+            int maxMessages,
+            Integer messageThreshold,
+            Integer tokenThreshold,
+            int maxToolMessagesToKeep
+    ) {
+        super(messageThreshold, tokenThreshold);
         if (maxMessages < 3) {
             throw new IllegalArgumentException("maxMessages must be at least 3");
         }
+        if (maxToolMessagesToKeep < 1) {
+            throw new IllegalArgumentException("maxToolMessagesToKeep must be at least 1");
+        }
         this.maxMessages = maxMessages;
+        this.maxToolMessagesToKeep = maxToolMessagesToKeep;
     }
 
     @Override
@@ -44,7 +59,7 @@ public class ToolAwareCompactionStrategy implements CompactionStrategy {
 
         result.addAll(systems);
 
-        int reservedSlots = Math.min(toolMessages.size(), Math.max(1, maxMessages / 3));
+        int reservedSlots = Math.min(toolMessages.size(), maxToolMessagesToKeep);
         int remainingSlots = Math.max(0, maxMessages - result.size() - reservedSlots);
 
         if (remainingSlots > 0 && !others.isEmpty()) {
@@ -62,10 +77,5 @@ public class ToolAwareCompactionStrategy implements CompactionStrategy {
         }
 
         return result;
-    }
-
-    @Override
-    public boolean shouldCompact(List<ChatMessage> messages) {
-        return messages != null && messages.size() > maxMessages;
     }
 }

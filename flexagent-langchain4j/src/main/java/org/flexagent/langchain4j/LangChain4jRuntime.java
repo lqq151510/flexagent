@@ -34,6 +34,7 @@ public class LangChain4jRuntime implements AgentRuntime {
     private AgentConfig config;
     private ToolAdapter toolAdapter;
     private CompactionStrategy compactionStrategy = new NoopCompactionStrategy();
+    private volatile String sessionId = "stateless";
     
     private volatile CompletableFuture<Void> idleFuture = CompletableFuture.completedFuture(null);
     private volatile CompletableFuture<Void> toolResponseLatch = new CompletableFuture<>();
@@ -57,6 +58,14 @@ public class LangChain4jRuntime implements AgentRuntime {
             this.chatMessages.clear();
             this.chatMessages.addAll(messages);
         }
+    }
+
+    public void setSessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            this.sessionId = "stateless";
+            return;
+        }
+        this.sessionId = sessionId;
     }
 
     public List<ChatMessage> getChatMessages() {
@@ -120,9 +129,27 @@ public class LangChain4jRuntime implements AgentRuntime {
                 List<ToolSpecification> toolSpecs = toolAdapter.getToolSpecifications();
                 Response<AiMessage> response;
                 
-                List<ChatMessage> compacted = compactionStrategy.shouldCompact(chatMessages)
+                int beforeMessageCount = chatMessages.size();
+                int beforeTokenCount = compactionStrategy.estimateTokenCount(chatMessages);
+                boolean shouldCompact = compactionStrategy.shouldCompact(chatMessages);
+                String reason = compactionStrategy.compactionReason(chatMessages);
+                List<ChatMessage> compacted = shouldCompact
                         ? compactionStrategy.compact(chatMessages)
                         : new ArrayList<>(chatMessages);
+                int afterMessageCount = compacted.size();
+                int afterTokenCount = compactionStrategy.estimateTokenCount(compacted);
+
+                if (shouldCompact) {
+                    log.info(
+                            "Compaction triggered. sessionId={}, reason={}, messages:{}->{}, tokens:{}->{}",
+                            sessionId, reason, beforeMessageCount, afterMessageCount, beforeTokenCount, afterTokenCount
+                    );
+                } else {
+                    log.debug(
+                            "Compaction skipped. sessionId={}, reason={}, messages={}, tokens={}",
+                            sessionId, reason, beforeMessageCount, beforeTokenCount
+                    );
+                }
                 log.info("Invoking LangChain4j delegate model (compacted context size: {})...", compacted.size());
                 if (toolSpecs != null && !toolSpecs.isEmpty()) {
                     response = model.generate(compacted, toolSpecs);

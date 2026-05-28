@@ -96,4 +96,36 @@ public class SpringBootAutoConfigurationTest {
                     assertThat(toolBean).isInstanceOf(SampleSpringTool.class);
                 });
     }
+
+    @Test
+    public void testAutoConfigurationWithInMemoryMemory() {
+        this.contextRunner
+                .withUserConfiguration(MockModelConfig.class)
+                .withPropertyValues(
+                        "flexagent.memory.type=in-memory",
+                        "flexagent.memory.ttl=30m"
+                )
+                .run((context) -> {
+                    assertThat(context).hasSingleBean(org.flexagent.core.memory.AgentMemory.class);
+                    org.flexagent.core.memory.AgentMemory memory = context.getBean(org.flexagent.core.memory.AgentMemory.class);
+                    assertThat(memory).isInstanceOf(org.flexagent.core.memory.InMemoryAgentMemory.class);
+                });
+    }
+
+    @Test
+    public void testAutoConfigurationWithRedisMemory() {
+        this.contextRunner
+                .withUserConfiguration(MockModelConfig.class)
+                .withPropertyValues(
+                        "flexagent.memory.type=redis",
+                        "flexagent.memory.ttl=1h",
+                        "flexagent.memory.redis.host=localhost",
+                        "flexagent.memory.redis.port=6379"
+                )
+                .run((context) -> {
+                    assertThat(context).hasSingleBean(org.flexagent.core.memory.AgentMemory.class);
+                    org.flexagent.core.memory.AgentMemory memory = context.getBean(org.flexagent.core.memory.AgentMemory.class);
+                    assertThat(memory).isInstanceOf(org.flexagent.core.memory.RedisAgentMemory.class);
+                });
+    }
 }

@@ -3,6 +3,7 @@ package org.flexagent.langchain4j;
 import org.flexagent.core.memory.AgentMemory;
 import org.flexagent.core.memory.InMemoryAgentMemory;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.langchain4j.compaction.ToolAwareCompactionStrategy;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.Tool;
@@ -222,5 +223,57 @@ public class FlexAgentMemoryTest {
         
         assertTrue(secondTurnInput.get(4) instanceof UserMessage);
         assertEquals("Next prompt", ((UserMessage) secondTurnInput.get(4)).text());
+    }
+
+    @Test
+    public void testCompactionWithToolAwareKeepsToolHistoryAcrossTurns() {
+        final List<List<ChatMessage>> capturedMessages = new ArrayList<>();
+        final int[] turnCount = {0};
+
+        ChatLanguageModel mockModel = new ChatLanguageModel() {
+            @Override
+            public Response<AiMessage> generate(List<ChatMessage> messages) {
+                capturedMessages.add(new ArrayList<>(messages));
+                int tc = turnCount[0];
+                if (tc == 0) {
+                    turnCount[0]++;
+                    ToolExecutionRequest req = ToolExecutionRequest.builder()
+                            .id("call-keep")
+                            .name("add")
+                            .arguments("{\"a\":2,\"b\":3}")
+                            .build();
+                    return Response.from(AiMessage.from(req));
+                } else if (tc == 1) {
+                    turnCount[0]++;
+                    return Response.from(AiMessage.from("Tool result is 5"));
+                } else {
+                    return Response.from(AiMessage.from("follow-up-ok"));
+                }
+            }
+
+            @Override
+            public Response<AiMessage> generate(List<ChatMessage> messages, List<ToolSpecification> toolSpecifications) {
+                return generate(messages);
+            }
+        };
+
+        AgentMemory memory = new InMemoryAgentMemory();
+        FlexAgentChatModel model = FlexAgentChatModel.builder()
+                .delegateModel(mockModel)
+                .memory(memory)
+                .toolCallPolicy(ToolCallPolicy.STRICT)
+                .addToolObject(new TestTools())
+                .compactionStrategy(new ToolAwareCompactionStrategy(4, 4, null, 1))
+                .build();
+
+        Response<AiMessage> first = model.generate("session-compaction-tool", "Please add");
+        assertEquals("Tool result is 5", first.content().text());
+        Response<AiMessage> second = model.generate("session-compaction-tool", "continue");
+        assertEquals("follow-up-ok", second.content().text());
+
+        assertTrue(capturedMessages.size() >= 3);
+        List<ChatMessage> secondTurnInput = capturedMessages.get(2);
+        assertTrue(secondTurnInput.stream().anyMatch(m -> m instanceof ToolExecutionResultMessage));
+        assertTrue(secondTurnInput.stream().anyMatch(m -> "continue".equals(m.text())));
     }
 }
