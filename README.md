@@ -1,8 +1,8 @@
 # FlexAgent
 > Lightweight Java Agent Runtime Adapter for LangChain4j and OpenAI-compatible models.
 
-[![CI Build](https://github.com/your-username/flexagent/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/flexagent/actions/workflows/ci.yml)
-[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://img.shields.io/badge/Java-17%2B-blue)
+[![CI Build](https://github.com/lqq151510/flexagent/actions/workflows/maven.yml/badge.svg)](https://github.com/lqq151510/flexagent/actions/workflows/maven.yml)
+[![Java](https://img.shields.io/badge/Java-21%2B-blue)](https://img.shields.io/badge/Java-21%2B-blue)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v0.5.0-blue)](https://img.shields.io/badge/version-v0.5.0-blue)
 
@@ -22,8 +22,8 @@ FlexAgent 是一个轻量级 Java Agent Runtime 适配层，用于解耦业务�
 确保你的环境已安装 JDK 21 和 Maven。
 ```bash
 # 克隆项目
-git clone <your-repository-url>
-cd sdk
+git clone https://github.com/lqq151510/flexagent.git
+cd flexagent
 
 # 编译并运行所有单元测试
 mvn clean test
@@ -81,3 +81,14 @@ try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
 * **上下文压缩与长对话控制**：[Context Compaction](docs/examples/context-compaction.md)
 * **未来演进路线图**：[ROADMAP.md](ROADMAP.md)
 * **版本发布日志**：[CHANGELOG.md](CHANGELOG.md)
+* **维护说明**：[MAINTENANCE.md](MAINTENANCE.md)
+* **Pull Request 指南**：[PULL_REQUEST_GUIDELINES.md](PULL_REQUEST_GUIDELINES.md)
+
+---
+
+## 🧩 开源维护与成熟度
+
+* **持续集成**：每次 push / pull request 都会运行 Maven 构建与测试。
+* **版本记录**：通过 `CHANGELOG.md` 维护每次发布的功能变更与演进说明。
+* **贡献规范**：仓库包含 `CONTRIBUTING.md`、`SECURITY.md` 与 PR 模板，便于外部协作者参与。
+* **模块化交付**：核心、适配器、示例、Spring Boot Starter 分模块维护，便于分层演进与复用。

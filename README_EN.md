@@ -1,8 +1,8 @@
 # FlexAgent
 > Lightweight Java Agent Runtime Adapter for LangChain4j and OpenAI-compatible models.
 
-[![CI Build](https://github.com/your-username/flexagent/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/flexagent/actions/workflows/ci.yml)
-[![Java](https://img.shields.io/badge/Java-17%2B-blue)](https://img.shields.io/badge/Java-17%2B-blue)
+[![CI Build](https://github.com/lqq151510/flexagent/actions/workflows/maven.yml/badge.svg)](https://github.com/lqq151510/flexagent/actions/workflows/maven.yml)
+[![Java](https://img.shields.io/badge/Java-21%2B-blue)](https://img.shields.io/badge/Java-21%2B-blue)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-v0.5.0-blue)](https://img.shields.io/badge/version-v0.5.0-blue)
 
@@ -22,8 +22,8 @@ You can easily clone and run the project locally without installing any external
 Ensure you have JDK 21 and Maven installed.
 ```bash
 # Clone the repository
-git clone <your-repository-url>
-cd sdk
+git clone https://github.com/lqq151510/flexagent.git
+cd flexagent
 
 # Compile and run all tests
 mvn clean test
@@ -68,3 +68,14 @@ You will see:
 * **Context Compaction**: [Context Compaction](docs/examples/context-compaction.md)
 * **Roadmap**: [ROADMAP.md](ROADMAP.md)
 * **Changelog**: [CHANGELOG.md](CHANGELOG.md)
+* **Maintenance Guide**: [MAINTENANCE.md](MAINTENANCE.md)
+* **Pull Request Guidelines**: [PULL_REQUEST_GUIDELINES.md](PULL_REQUEST_GUIDELINES.md)
+
+---
+
+## 🧩 Open Source Maintenance & Maturity
+
+* **Continuous integration**: Maven build and tests run on every push and pull request.
+* **Version history**: `CHANGELOG.md` records each release and its major changes.
+* **Contribution readiness**: The repository includes `CONTRIBUTING.md`, `SECURITY.md`, and a PR template.
+* **Modular delivery**: Core, adapters, examples, and the Spring Boot starter are maintained as separate modules for clean evolution.

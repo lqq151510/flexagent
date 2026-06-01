@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FlexAgent Documentation
+    url: https://github.com/lqq151510/flexagent/blob/main/README.md
+    about: Read the project overview and quick start guide before opening a new issue.
