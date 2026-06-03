@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import org.flexagent.core.memory.compaction.CompactionStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -75,6 +76,20 @@ public class CompactionStrategyTest {
 
         assertTrue(compacted.stream().anyMatch(msg -> msg instanceof ToolExecutionResultMessage));
         assertTrue(compacted.stream().anyMatch(msg -> "final answer".equals(msg.text())));
+    }
+
+    @Test
+    void legacyCompactOnlyStrategyCompactsByDefault() {
+        class LegacyStrategy implements CompactionStrategy<ChatMessage> {
+            @Override
+            public List<ChatMessage> compact(List<ChatMessage> messages) {
+                return messages;
+            }
+        }
+
+        LegacyStrategy strategy = new LegacyStrategy();
+
+        assertTrue(strategy.shouldCompact(List.of(UserMessage.from("hello"))));
     }
 
     @Test

@@ -63,15 +63,15 @@ public class InMemoryAgentMemory implements AgentMemory {
             return List.of();
         }
         MemoryEntry entry = storage.get(sessionId);
-        if (entry != null) {
-            if (isExpired(entry)) {
-                storage.remove(sessionId);
-            } else {
-                entry.updateAccessTime();
-                return entry.messages;
-            }
+        if (entry == null) {
+            return List.of();
         }
-        return storage.computeIfAbsent(sessionId, k -> new MemoryEntry(new CopyOnWriteArrayList<>())).messages;
+        if (isExpired(entry)) {
+            storage.remove(sessionId);
+            return List.of();
+        }
+        entry.updateAccessTime();
+        return List.copyOf(entry.messages);
     }
 
     @Override

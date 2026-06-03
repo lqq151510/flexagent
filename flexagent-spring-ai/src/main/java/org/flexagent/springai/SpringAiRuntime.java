@@ -102,7 +102,7 @@ public class SpringAiRuntime implements AgentRuntime {
                 }
 
                 FunctionCallingOptions options = FunctionCallingOptions.builder()
-                        .functionCallbacks(callbacks)
+                        .withFunctionCallbacks(callbacks)
                         .build();
                 prompt = new Prompt(messagesToSend, options);
             } else {
@@ -113,7 +113,7 @@ public class SpringAiRuntime implements AgentRuntime {
             AssistantMessage assistantMessage = response.getResult().getOutput();
             chatMessages.add(assistantMessage);
 
-            String rawText = assistantMessage.getText();
+            String rawText = assistantMessage.getContent();
             String thinking = "";
             String text = rawText != null ? rawText : "";
 

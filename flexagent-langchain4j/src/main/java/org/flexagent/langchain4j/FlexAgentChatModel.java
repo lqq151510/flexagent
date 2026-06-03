@@ -59,6 +59,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
     // Persistent runtime and tool adapter
     private final AgentRuntime activeRuntime;
     private final ToolAdapter toolAdapter;
+    private final List<ChatMessage> initialSystemMessages;
 
     private FlexAgentChatModel(Builder builder) {
         this.binaryPath = builder.binaryPath;
@@ -78,6 +79,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         try {
             this.activeRuntime = initRuntime(builder.runtimeType);
             this.toolAdapter = new ToolAdapter(this.toolObjects);
+            this.initialSystemMessages = snapshotInitialSystemMessages();
         } catch (FlexAgentException e) {
             throw e;
         } catch (Exception e) {
@@ -159,7 +161,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
     }
 
     @Override
-    public Response<AiMessage> generate(List<ChatMessage> messages) {
+    public synchronized Response<AiMessage> generate(List<ChatMessage> messages) {
         String prompt = "";
         for (ChatMessage message : messages) {
             if (message instanceof UserMessage userMsg) {
@@ -183,12 +185,14 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
             // Sync initial stateless history to memory if memory is empty
             if (chatHistory.isEmpty() && messages != null && messages.size() > 1) {
-                List<ChatMessage> initialHistory = messages.subList(0, messages.size() - 1);
+                List<ChatMessage> initialHistory = new ArrayList<>(messages.subList(0, messages.size() - 1));
                 for (ChatMessage cm : initialHistory) {
                     this.memory.addMessage(sessionId, toAgentMessage(cm));
-                    chatHistory.add(cm);
                 }
+                chatHistory.addAll(initialHistory);
             }
+
+            chatHistory = withInitialSystemMessages(chatHistory);
 
             if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
                 lc4jRuntime.setHistoryMessages(chatHistory);
@@ -198,9 +202,9 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             // Update conversation history dynamically for the persistent LangChain4j runtime
             if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
                 if (messages != null && messages.size() > 1) {
-                    lc4jRuntime.setHistoryMessages(messages.subList(0, messages.size() - 1));
+                    lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>(messages.subList(0, messages.size() - 1))));
                 } else {
-                    lc4jRuntime.setHistoryMessages(new ArrayList<>());
+                    lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>()));
                 }
                 lc4jRuntime.setSessionId(sessionId);
             }
@@ -313,6 +317,41 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         } finally {
             AgentSessionContext.clear();
         }
+    }
+
+    private List<ChatMessage> snapshotInitialSystemMessages() {
+        List<ChatMessage> snapshot = new ArrayList<>();
+        if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+            List<ChatMessage> runtimeHistory = lc4jRuntime.getChatMessages();
+            if (runtimeHistory != null) {
+                for (ChatMessage message : runtimeHistory) {
+                    if (message instanceof SystemMessage) {
+                        snapshot.add(message);
+                    }
+                }
+            }
+        } else if (this.systemInstruction != null && !this.systemInstruction.isBlank()) {
+            snapshot.add(SystemMessage.from(this.systemInstruction));
+        }
+        return List.copyOf(snapshot);
+    }
+
+    private List<ChatMessage> withInitialSystemMessages(List<ChatMessage> messages) {
+        List<ChatMessage> history = messages != null ? new ArrayList<>(messages) : new ArrayList<>();
+        boolean hasSystem = false;
+        for (ChatMessage message : history) {
+            if (message instanceof SystemMessage) {
+                hasSystem = true;
+                break;
+            }
+        }
+        if (!hasSystem && !this.initialSystemMessages.isEmpty()) {
+            List<ChatMessage> merged = new ArrayList<>(this.initialSystemMessages.size() + history.size());
+            merged.addAll(this.initialSystemMessages);
+            merged.addAll(history);
+            return merged;
+        }
+        return history;
     }
 
     private ChatMessage toChatMessage(AgentMessage msg) {

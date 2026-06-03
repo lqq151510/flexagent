@@ -1,6 +1,7 @@
 package org.flexagent.langchain4j;
 
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.memory.InMemoryAgentMemory;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -219,6 +220,39 @@ public class FlexAgentChatModelTest {
         });
         assertTrue(ex.getMessage().contains("Failed to parse tool call arguments"));
         assertTrue(ex.getMessage().contains("STRICT"));
+    }
+
+    @Test
+    public void testGenerateWithSessionMemoryPreservesSystemPrompt() {
+        List<List<ChatMessage>> capturedMessages = new ArrayList<>();
+        ChatLanguageModel capturingModel = new ChatLanguageModel() {
+            @Override
+            public Response<AiMessage> generate(List<ChatMessage> messages) {
+                capturedMessages.add(new ArrayList<>(messages));
+                return Response.from(AiMessage.from("ok"));
+            }
+
+            @Override
+            public Response<AiMessage> generate(List<ChatMessage> messages, List<ToolSpecification> toolSpecifications) {
+                return generate(messages);
+            }
+        };
+
+        FlexAgentChatModel model = FlexAgentChatModel.builder()
+                .delegateModel(capturingModel)
+                .memory(new InMemoryAgentMemory())
+                .systemInstruction("System Prompt")
+                .build();
+
+        Response<AiMessage> response = model.generate("session-1", "Hello");
+        assertNotNull(response);
+        assertFalse(capturedMessages.isEmpty());
+
+        List<ChatMessage> sentMessages = capturedMessages.get(0);
+        assertTrue(sentMessages.get(0) instanceof SystemMessage);
+        assertEquals("System Prompt", sentMessages.get(0).text());
+        assertTrue(sentMessages.get(sentMessages.size() - 1) instanceof UserMessage);
+        assertEquals("Hello", sentMessages.get(sentMessages.size() - 1).text());
     }
 
     @Test

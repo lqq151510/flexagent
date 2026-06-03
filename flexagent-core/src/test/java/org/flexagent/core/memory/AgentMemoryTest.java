@@ -27,6 +27,8 @@ public class AgentMemoryTest {
         List<AgentMessage> messagesA = memory.getMessages("session-A");
         assertEquals(1, messagesA.size());
         assertEquals("Hello A", messagesA.get(0).text());
+        assertThrows(UnsupportedOperationException.class, () -> messagesA.add(AgentMessage.user("Mutate")));
+        assertEquals(1, memory.getMessages("session-A").size());
 
         List<AgentMessage> messagesB = memory.getMessages("session-B");
         assertEquals(1, messagesB.size());

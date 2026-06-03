@@ -22,7 +22,7 @@ public interface CompactionStrategy<M> {
      * @return true if compaction should run, otherwise false.
      */
     default boolean shouldCompact(List<M> messages) {
-        return false;
+        return true;
     }
 
     /**
