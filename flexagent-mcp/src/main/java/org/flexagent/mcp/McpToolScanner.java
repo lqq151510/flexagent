@@ -1,12 +1,10 @@
 package org.flexagent.mcp;
 
 import org.flexagent.core.model.ToolDefinition;
-import org.flexagent.core.tool.FlexParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -16,6 +14,9 @@ import java.util.List;
 public class McpToolScanner {
 
     private static final Logger log = LoggerFactory.getLogger(McpToolScanner.class);
+    private static final String SEARCH_KNOWLEDGE_SCHEMA = "{\"type\":\"object\","
+            + "\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"The search query\"}},"
+            + "\"required\":[\"query\"]}";
 
     private final String serverUrl;
 
@@ -37,25 +38,10 @@ public class McpToolScanner {
         tools.add(new ToolDefinition(
                 "mcp_search_knowledge",
                 "Searches the knowledge base on the MCP server.",
-                List.of(
-                        new FlexParam("query", String.class, "The search query", true)
-                ),
-                this::executeMcpSearchKnowledge
+                SEARCH_KNOWLEDGE_SCHEMA
         ));
 
         log.info("Fetched {} tools from MCP Server.", tools.size());
         return tools;
-    }
-
-    private Object executeMcpSearchKnowledge(Object... args) {
-        if (args.length == 0) {
-            return "Error: missing query argument";
-        }
-        String query = (String) args[0];
-        log.info("Executing MCP tool 'mcp_search_knowledge' with query: {}", query);
-
-        // In a real implementation, this would format an MCP 'tools/call' JSON-RPC message
-        // and await the result from the MCP server.
-        return "MCP Mock Result for: " + query;
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.model.function.FunctionCallback;
@@ -101,7 +102,7 @@ public class SpringAiRuntime implements AgentRuntime {
                     callbacks.add(new FlexAgentFunctionCallback(td));
                 }
 
-                FunctionCallingOptions options = FunctionCallingOptions.builder()
+                ChatOptions options = (ChatOptions) FunctionCallingOptions.builder()
                         .withFunctionCallbacks(callbacks)
                         .build();
                 prompt = new Prompt(messagesToSend, options);
