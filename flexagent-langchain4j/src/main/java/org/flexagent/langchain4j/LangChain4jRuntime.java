@@ -7,7 +7,7 @@ import org.flexagent.core.model.*;
 import org.flexagent.core.runtime.AgentConfig;
 import org.flexagent.core.runtime.AgentRuntime;
 import org.flexagent.core.runtime.XmlThinkTagExtractor;
-import org.flexagent.langchain4j.compaction.CompactionStrategy;
+import org.flexagent.core.memory.compaction.CompactionStrategy;
 import org.flexagent.langchain4j.compaction.NoopCompactionStrategy;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
@@ -34,7 +34,7 @@ public class LangChain4jRuntime implements AgentRuntime {
     
     private AgentConfig config;
     private ToolAdapter toolAdapter;
-    private CompactionStrategy compactionStrategy = new NoopCompactionStrategy();
+    private CompactionStrategy<ChatMessage> compactionStrategy = new NoopCompactionStrategy();
     private volatile String sessionId = "stateless";
     
     private volatile CompletableFuture<Void> idleFuture = CompletableFuture.completedFuture(null);
@@ -48,7 +48,7 @@ public class LangChain4jRuntime implements AgentRuntime {
         this.model = Objects.requireNonNull(model, "model cannot be null");
     }
 
-    public void setCompactionStrategy(CompactionStrategy strategy) {
+    public void setCompactionStrategy(CompactionStrategy<ChatMessage> strategy) {
         if (strategy != null) {
             this.compactionStrategy = strategy;
         }

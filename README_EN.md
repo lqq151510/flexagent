@@ -50,6 +50,7 @@ You will see:
 * **Tool Decoupling**: Business `@Tool` methods are converted into standard `ToolDefinition` objects. Adapters automatically map parameters, shielding business tools from base LLM framework migrations.
 * **Streaming `<think>` Tag Parser**: High-performance `XmlThinkTagExtractor` state machine that extracts `ThinkingDelta` and `TextDelta` segments, resilient against packet fragmentation or unclosed tags.
 * **Tool Call Failure Recovery**: Built-in `STRICT`, `LENIENT`, and `TEXT_FALLBACK` policies to gracefully handle hallucinated or malformed JSON arguments produced by LLMs.
+* **Session Memory and TTL**: Supports both `InMemoryAgentMemory` and `RedisAgentMemory` for per-session history isolation, cross-request recall, and expiration control.
 
 ---
 
@@ -65,6 +66,8 @@ You will see:
 ## 📖 Documentation
 
 * **Architecture & Comparison**: [FlexAgent vs LangChain4j vs Spring AI](docs/comparison-with-langchain4j-and-spring-ai.md)
+* **Session Memory Quickstart**: [docs/memory_quickstart.md](docs/memory_quickstart.md)
+* **Spring Boot Memory / Redis Setup**: [docs/spring-boot-memory.md](docs/spring-boot-memory.md)
 * **Context Compaction**: [Context Compaction](docs/examples/context-compaction.md)
 * **Roadmap**: [ROADMAP.md](ROADMAP.md)
 * **Changelog**: [CHANGELOG.md](CHANGELOG.md)

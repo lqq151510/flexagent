@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 v0.1: 基础骨架与核心可用 (Current Stage)
+## 📌 v0.1: 基础骨架与核心可用
 * **目标**：实现核心抽象解耦、打通招牌 DeepSeek 示例并配备全套持续集成 (CI)。
 * **交付内容**：
   * [x] **Runtime SPI**：提供核心 `AgentRuntime`、`AgentRuntimeProvider` 等可插拔 SPI 实现。
@@ -21,7 +21,7 @@
 * **目标**：简化配置方式，降低上手门槛，支持更丰富的异常处理和更多 OpenAI-compatible 端点。
 * **交付内容**：
   * [x] **极简 Builder API**：提供更便捷的实例化工具（例如 `FlexAgentChatModel.builder().langChain4j(model).tools(...).build()`）。
-  * [ ] **Ollama & Qwen 示例细化**：在 Examples 中正式交付本地 Ollama 和阿里云千问的完整运行示例。
+  * [x] **Ollama & Qwen 示例细化**：在 Examples 中正式交付本地 Ollama 和阿里云千问的完整运行示例。
   * [x] **ToolCall 异常自愈**：完善 `ToolCallPolicy` 的容错策略与错误上报机制。
   * [x] **更清晰的异常链**：为 Builder 误用、运行时初始化和 ToolCall 参数解析提供带有一步修复指引的自定义异常。
 
@@ -30,15 +30,37 @@
 ## 📌 v0.3: Spring Boot 生态整合
 * **目标**：实现与 Java 传统后端生态的无缝连接，提供声明式的自动装配能力。
 * **交付内容**：
-  * [ ] **`flexagent-spring-boot-starter`**：开发独立的 Spring Boot 起步依赖。
-  * [ ] **声明式 YAML 配置**：支持通过 `application.yml` 来定义运行期后端类型、大模型密钥等。
-  * [ ] **Spring Bean 工具自动注册**：自动扫描 Spring 容器中所有带有 `@FlexTool` 注解的 Bean 并转化为 Agent 工具。
+  * [x] **`flexagent-spring-boot-starter`**：开发独立的 Spring Boot 起步依赖。
+  * [x] **声明式 YAML 配置**：支持通过 `application.yml` 来定义运行期后端类型、大模型密钥等。
+  * [x] **Spring Bean 工具自动注册**：自动扫描 Spring 容器中所有带有 `@FlexTool` 注解的 Bean 并转化为 Agent 工具。
 
 ---
 
 ## 📌 v0.4: 异构运行时与高级编排
-* **目标**：扩展 Runtime 提供者，支持 MCP 协议与多 Agent 协同。
+* **目标**：扩展 Runtime 提供者，并为长对话、多工具链路补齐更强的上下文治理能力。
 * **交付内容**：
   * [ ] **Spring AI Runtime Provider**：支持将 Spring AI 运行时作为后端的 SPI 提供者。
   * [ ] **MCP (Model Context Protocol) 运行时支持**：原生对接 MCP 服务端，加载外部通用工具。
-  * [ ] **滑动窗口上下文管理增强**：更精细的 Token 计算与自动压缩淘汰策略。
+  * [x] **滑动窗口上下文管理增强**：已支持 `SlidingWindow`、`Summary` 与 `ToolAware` 三类压缩策略。
+
+---
+
+## 📌 v0.5: Session Memory Foundation
+* **目标**：为多轮智能体交互建立可复用的会话记忆底座，并保持无状态模式向下兼容。
+* **交付内容**：
+  * [x] **AgentMemory 抽象**：统一 `AgentMemory`、`AgentMessage` 与 `AgentSessionContext` 核心模型。
+  * [x] **In-Memory 默认实现**：支持单机进程内会话隔离与 TTL 过期。
+  * [x] **Redis Memory 实现**：支持跨进程历史恢复与过期续期。
+  * [x] **Builder 接入点**：通过 `FlexAgentChatModel.Builder.memory(...)` 与 compaction API 组合使用。
+  * [x] **基础回归测试**：覆盖多轮对话、工具调用记忆、会话隔离和 TTL。
+
+---
+
+## 📌 v0.6: Memory 产品化与 Spring Boot 落地 (Current Stage)
+* **目标**：把 v0.5 的 Memory 基础能力沉淀为可直接交付给 Spring Boot 项目的接入体验、文档与回归保障。
+* **交付内容**：
+  * [x] **Spring Boot Memory/Redis 配置文档**：提供完整的 `application.yml` 配置说明、参数表和接入建议。
+  * [x] **Redis 使用示例**：补齐 Starter 场景下的 Redis 配置示例与会话验证方法。
+  * [x] **Session-Aware Spring Demo**：示例应用支持显式传入 `sessionId`，便于演示多轮隔离。
+  * [x] **Starter 层回归测试**：覆盖自动配置后的 session isolation 与 TTL 过期行为。
+  * [ ] **生产级增强项**：补充更细粒度的 Memory 观测指标与可配置 Redis key namespace。

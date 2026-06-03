@@ -16,6 +16,8 @@
         <module>flexagent-core</module>
         <module>flexagent-localharness</module>
         <module>flexagent-langchain4j</module>
+        <module>flexagent-spring-ai</module>
+        <module>flexagent-mcp</module>
         <module>flexagent-spring-boot-starter</module>
         <module>flexagent-examples</module>
     </modules>

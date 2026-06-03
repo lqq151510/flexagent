@@ -29,7 +29,7 @@ AgentMemory memory = new InMemoryAgentMemory();
 
 // 2. 构建 FlexAgent 实例
 FlexAgentChatModel agent = FlexAgentChatModel.builder()
-        .delegateModel(yourLanguageModel)
+        .model(yourLanguageModel)
         .memory(memory) // 注入 Memory 实例
         .build();
 ```
@@ -84,7 +84,39 @@ try {
 
 ---
 
-## 5. 无状态行为向下兼容
+## 5. Spring Boot Starter 集成
+
+如果你使用 `flexagent-spring-boot-starter`，可以直接通过配置文件启用 Memory，无需手动 new `InMemoryAgentMemory`：
+
+```yaml
+flexagent:
+  runtime: langchain4j
+  memory:
+    type: in-memory
+    ttl: 30m
+```
+
+切换到 Redis 也只需要改动配置：
+
+```yaml
+flexagent:
+  runtime: langchain4j
+  memory:
+    type: redis
+    ttl: 2h
+    redis:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 2000
+```
+
+更完整的 Spring Boot 接入方式、Redis 说明、以及 `sessionId` 透传示例见 [docs/spring-boot-memory.md](spring-boot-memory.md)。
+
+---
+
+## 6. 无状态行为向下兼容
 
 当你的 FlexAgent 实例 **未配置 memory** 时，它将完全维持原有的无状态行为：
 - 调用 `generate(List<ChatMessage> messages)` 时，直接取传入的完整 `messages` 列表作为本次对话的上下文。

@@ -1,0 +1,5 @@
+flexagent:
+  runtime: langchain4j
+  memory:
+    type: in-memory
+    ttl: 30m

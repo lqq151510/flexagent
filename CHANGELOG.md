@@ -2,6 +2,18 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [0.6.0-SNAPSHOT] - 2026-06-03
+
+### 📖 Spring Boot Memory 产品化
+* 新增 `docs/spring-boot-memory.md`，系统说明 `flexagent.memory.*` 配置项、`in-memory` / `redis` 两种模式、TTL 行为与生产建议。
+* `docs/memory_quickstart.md` 增补 Spring Boot Starter 集成方式，并统一使用当前 Builder API。
+* 中英文 `README` 增加 Session Memory / Redis 文档入口，强化 v0.5 Memory 能力的 discoverability。
+
+### 🧪 示例与测试补强
+* Spring Boot 示例 `AgentController` 改为显式接收 `sessionId`，便于直观演示会话隔离。
+* Spring Boot 示例新增默认 `application.yml`，开箱即启用 `in-memory` + `30m TTL` 的 Memory 配置。
+* `SpringBootAutoConfigurationTest` 补充 Starter 层的 session isolation 与 TTL 过期回归测试，验证自动配置后的 `FlexAgentChatModel` 会正确继承 Memory 行为。
+
 ## [0.5.0] - 2026-05-28
 
 ### 🧠 Session Memory 与上下文压缩

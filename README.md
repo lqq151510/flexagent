@@ -50,6 +50,7 @@ mvn -pl flexagent-examples exec:java -Dexec.mainClass="org.flexagent.examples.De
 * **业务工具彻底解耦**：将业务层的 `@Tool` 注解方法抽象转化为通用的 `ToolDefinition`，底层适配器根据实际运行时进行参数映射，未来引入 Spring AI 时工具类无需重写。
 * **推理 `<think>` 标签流式回溯解析**：针对 DeepSeek-R1 等推理模型，在流式接收过程中通过内置状态机精准分段剥离 `ThinkingDelta` 与 `TextDelta`，无惧网络分片导致的标签切碎或未闭合。
 * **ToolCall 容灾策略**：内置 `STRICT`、`LENIENT` 和 `TEXT_FALLBACK` 策略，轻松应对模型生成的 JSON 幻觉和破碎参数输出。
+* **Session Memory 与 TTL**：支持 `InMemoryAgentMemory` 与 `RedisAgentMemory`，可按 `sessionId` 进行会话隔离、跨请求记忆与过期清理。
 
 ### 极简 Builder 示例
 
@@ -78,6 +79,8 @@ try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
 ## 📖 相关文档
 
 * **设计思想与框架对比**：[FlexAgent vs LangChain4j vs Spring AI](docs/comparison-with-langchain4j-and-spring-ai.md)
+* **Session Memory 快速开始**：[docs/memory_quickstart.md](docs/memory_quickstart.md)
+* **Spring Boot Memory / Redis 配置**：[docs/spring-boot-memory.md](docs/spring-boot-memory.md)
 * **上下文压缩与长对话控制**：[Context Compaction](docs/examples/context-compaction.md)
 * **未来演进路线图**：[ROADMAP.md](ROADMAP.md)
 * **版本发布日志**：[CHANGELOG.md](CHANGELOG.md)

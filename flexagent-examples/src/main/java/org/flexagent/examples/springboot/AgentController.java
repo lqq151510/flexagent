@@ -16,7 +16,10 @@ public class AgentController {
     }
 
     @GetMapping("/chat")
-    public String chat(@RequestParam(value = "message", defaultValue = "Hello") String message) {
-        return agent.generate(message);
+    public String chat(
+            @RequestParam(value = "sessionId", defaultValue = "demo-session") String sessionId,
+            @RequestParam(value = "message", defaultValue = "Hello") String message
+    ) {
+        return agent.generate(sessionId, message).content().text();
     }
 }

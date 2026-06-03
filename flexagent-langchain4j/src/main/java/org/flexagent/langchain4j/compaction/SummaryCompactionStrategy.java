@@ -1,5 +1,7 @@
 package org.flexagent.langchain4j.compaction;
 
+import org.flexagent.core.memory.compaction.CompactionStrategy;
+
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
