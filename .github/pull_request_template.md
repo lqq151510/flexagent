@@ -1,23 +1,33 @@
-## Description
+## Summary
 
-Please include a summary of the change and which issue is fixed. Also include relevant motivation and context.
-
-Fixes # (issue)
+Describe what changed and why. Link issues with `Fixes #...` when applicable.
 
 ## Type of change
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
 - [ ] Documentation update
+- [ ] CI / test / maintenance
 
-## Checklist:
+## Verification
 
-- [ ] My code follows the code style of this project.
-- [ ] I have performed a self-review of my own code.
-- [ ] I have commented my code, particularly in hard-to-understand areas.
-- [ ] I have made corresponding changes to the documentation.
-- [ ] My changes generate no new warnings.
-- [ ] I have added tests that prove my fix is effective or that my feature works.
-- [ ] New and existing unit tests pass locally with my changes.
-- [ ] Any dependent changes have been merged and published in downstream modules.
+Paste the commands you ran and their result.
+
+```bash
+mvn -B -ntp clean verify
+```
+
+## Risk and rollout
+
+- Runtime/API behavior changed: yes / no
+- Public docs or examples updated: yes / no
+- Follow-up work required: none / describe
+
+## Reviewer checklist
+
+- [ ] The diff is focused and does not mix unrelated refactors.
+- [ ] Runtime changes preserve `flexagent-core` independence from third-party LLM SDKs.
+- [ ] Tests cover the changed behavior or explain why no test is needed.
+- [ ] Documentation and `CHANGELOG.md` are updated for user-facing changes.
+- [ ] CI artifacts are sufficient to debug failures (test reports / coverage reports).

@@ -13,9 +13,10 @@ This document summarizes how FlexAgent is maintained and how contributors can wo
 
 1. Update implementation and tests.
 2. Refresh `CHANGELOG.md` with user-facing changes.
-3. Verify the build with `mvn clean test`.
-4. Confirm README examples still match the current version and module layout.
-5. Publish the release only after documentation and CI are in sync.
+3. Verify the build with `mvn -B -ntp clean verify`.
+4. Review JaCoCo and Surefire artifacts from CI when failures or coverage regressions are suspected.
+5. Confirm README examples still match the current version and module layout.
+6. Publish the release only after documentation and CI are in sync.
 
 ## Contribution Workflow
 
@@ -33,7 +34,14 @@ This document summarizes how FlexAgent is maintained and how contributors can wo
 
 ## Verification Checklist
 
-- `mvn clean test`
+- `mvn -B -ntp clean verify`
 - `mvn -q -DskipTests test-compile`
 - Manual demo run from `flexagent-examples` when behavior changes affect user-facing flows
 - README and changelog consistency check
+
+## CI and Merge Quality
+
+- PRs and pushes run the Maven `verify` lifecycle, not just unit tests, so coverage reports are generated with every build.
+- CI uploads Surefire reports and JaCoCo HTML reports as artifacts to make failed reviews easier to debug.
+- Release tags matching `v*` trigger the publish workflow after the verification job succeeds.
+- Stale workflow runs are cancelled per branch/ref to keep PR checks focused on the latest commit.
