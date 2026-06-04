@@ -83,6 +83,21 @@ jobs:
         server-id: github
 
     - name: Publish to GitHub Packages
-      run: mvn -B -ntp -DskipTests deploy
+      run: |
+        set +e
+        mvn -B -ntp -DskipTests deploy 2>&1 | tee deploy.log
+        status=${PIPESTATUS[0]}
+        set -e
+
+        if [ "$status" -eq 0 ]; then
+          exit 0
+        fi
+
+        if grep -q "status code: 409" deploy.log; then
+          echo "::notice::Package version already exists in GitHub Packages; skipping deploy."
+          exit 0
+        fi
+
+        exit "$status"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

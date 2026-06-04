@@ -8,6 +8,7 @@
 * GitHub Actions 从 `mvn clean test` 升级为 `mvn -B -ntp clean verify`，让本地验证与 CI gate 保持一致。
 * CI 新增 Surefire 测试报告与 JaCoCo 覆盖率报告 artifacts，便于 PR 失败时快速定位。
 * 修复 tag 发布触发条件：`v*` tag 现在会触发 publish job，并在 verify 通过后执行发布。
+* 发布包流程对 GitHub Packages 已存在版本的 `409 Conflict` 做幂等跳过，避免重跑 tag / main 发布时误报失败。
 * PR 模板补充验证命令、风险/rollout、文档/changelog 与 reviewer checklist，减少合并前遗漏。
 
 ### 🧪 测试覆盖
