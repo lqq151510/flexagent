@@ -2,14 +2,18 @@ package org.flexagent.langchain4j;
 
 import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
+import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.runtime.RuntimeTypes;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,6 +42,21 @@ public class FlexAgentChatModelBuilderTest {
         }
     }
 
+    private static class CapturingModel implements ChatLanguageModel {
+        private List<ChatMessage> captured = new ArrayList<>();
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages) {
+            this.captured = new ArrayList<>(messages);
+            return Response.from(AiMessage.from("Mock"));
+        }
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages, List<ToolSpecification> toolSpecifications) {
+            return generate(messages);
+        }
+    }
+
     private static class SimpleTool {
         public String execute() {
             return "Executed";
@@ -49,17 +68,40 @@ public class FlexAgentChatModelBuilderTest {
         ChatLanguageModel model = new MockModel("standard-model");
         
         try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
-                .runtime(RuntimeTypes.LANGCHAIN4J)
-                .model(model)
+                .langChain4j(model)
                 .tools(new SimpleTool())
                 .enableThinkingExtraction(true)
-                .toolCallPolicy(ToolCallPolicy.TEXT_FALLBACK)
+                .textFallbackToolCalls()
                 .build()) {
             
             assertNotNull(agent.activeRuntime());
             // Verify thinking extraction toggled correctly
             String response = agent.generate("Hello");
             assertEquals("Mock", response);
+        }
+    }
+
+    @Test
+    public void testBuilderFailsFastWhenLangChain4jModelMissing() {
+        RuntimeInitializationException ex = assertThrows(RuntimeInitializationException.class, () ->
+                FlexAgentChatModel.builder()
+                        .runtime(RuntimeTypes.LANGCHAIN4J)
+                        .build()
+        );
+
+        assertTrue(ex.getMessage().contains("delegate model is required"));
+        assertTrue(ex.getMessage().contains(".langChain4j(model)"));
+    }
+
+    @Test
+    public void testToolCallPolicyShortcuts() throws Exception {
+        ChatLanguageModel model = new MockModel("standard-model");
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .langChain4j(model)
+                .strictToolCalls()
+                .build()) {
+            assertEquals(ToolCallPolicy.STRICT, agent.activeRuntime().toolCallPolicy());
         }
     }
 
@@ -84,6 +126,54 @@ public class FlexAgentChatModelBuilderTest {
                 .modelName("deepseek-reasoner")
                 .build()) {
             // Success
+        }
+    }
+
+    @Test
+    public void testCompactionMaxMessagesBuilderShortcut() throws Exception {
+        CapturingModel model = new CapturingModel();
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(model)
+                .compactionMaxMessages(5)
+                .build()) {
+            assertNotNull(agent.activeRuntime());
+
+            List<ChatMessage> context = List.of(
+                    SystemMessage.from("System"),
+                    UserMessage.from("1"),
+                    AiMessage.from("2"),
+                    UserMessage.from("3"),
+                    AiMessage.from("4"),
+                    UserMessage.from("5")
+            );
+            Response<AiMessage> response = agent.generate(context);
+            assertEquals("Mock", response.content().text());
+            assertEquals(5, model.captured.size());
+        }
+    }
+
+    @Test
+    public void testCompactionTokenThresholdBuilderShortcut() throws Exception {
+        CapturingModel model = new CapturingModel();
+
+        try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.LANGCHAIN4J)
+                .model(model)
+                .compactionMaxMessages(3)
+                .compactionMessageThreshold(100)
+                .compactionTokenThreshold(10)
+                .build()) {
+            List<ChatMessage> context = List.of(
+                    UserMessage.from("This is a very long first message."),
+                    AiMessage.from("This is a very long second message."),
+                    UserMessage.from("This is a very long third message."),
+                    AiMessage.from("This is a very long fourth message.")
+            );
+            Response<AiMessage> response = agent.generate(context);
+            assertEquals("Mock", response.content().text());
+            assertEquals(3, model.captured.size());
         }
     }
 }

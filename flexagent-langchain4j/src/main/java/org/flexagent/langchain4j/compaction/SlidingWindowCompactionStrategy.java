@@ -1,14 +1,21 @@
 package org.flexagent.langchain4j.compaction;
 
+import org.flexagent.core.memory.compaction.CompactionStrategy;
+
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SlidingWindowCompactionStrategy implements CompactionStrategy {
+public class SlidingWindowCompactionStrategy extends ThresholdCompactionStrategy {
     private final int maxMessages;
 
     public SlidingWindowCompactionStrategy(int maxMessages) {
+        this(maxMessages, maxMessages, null);
+    }
+
+    public SlidingWindowCompactionStrategy(int maxMessages, Integer messageThreshold, Integer tokenThreshold) {
+        super(messageThreshold, tokenThreshold);
         if (maxMessages < 2) {
             throw new IllegalArgumentException("maxMessages must be at least 2");
         }

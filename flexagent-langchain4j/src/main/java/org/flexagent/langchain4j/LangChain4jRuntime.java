@@ -2,11 +2,12 @@ package org.flexagent.langchain4j;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.flexagent.core.exception.ToolCallParsingException;
 import org.flexagent.core.model.*;
 import org.flexagent.core.runtime.AgentConfig;
 import org.flexagent.core.runtime.AgentRuntime;
 import org.flexagent.core.runtime.XmlThinkTagExtractor;
-import org.flexagent.langchain4j.compaction.CompactionStrategy;
+import org.flexagent.core.memory.compaction.CompactionStrategy;
 import org.flexagent.langchain4j.compaction.NoopCompactionStrategy;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
@@ -33,7 +34,8 @@ public class LangChain4jRuntime implements AgentRuntime {
     
     private AgentConfig config;
     private ToolAdapter toolAdapter;
-    private CompactionStrategy compactionStrategy = new NoopCompactionStrategy();
+    private CompactionStrategy<ChatMessage> compactionStrategy = new NoopCompactionStrategy();
+    private volatile String sessionId = "stateless";
     
     private volatile CompletableFuture<Void> idleFuture = CompletableFuture.completedFuture(null);
     private volatile CompletableFuture<Void> toolResponseLatch = new CompletableFuture<>();
@@ -46,7 +48,7 @@ public class LangChain4jRuntime implements AgentRuntime {
         this.model = Objects.requireNonNull(model, "model cannot be null");
     }
 
-    public void setCompactionStrategy(CompactionStrategy strategy) {
+    public void setCompactionStrategy(CompactionStrategy<ChatMessage> strategy) {
         if (strategy != null) {
             this.compactionStrategy = strategy;
         }
@@ -57,6 +59,18 @@ public class LangChain4jRuntime implements AgentRuntime {
             this.chatMessages.clear();
             this.chatMessages.addAll(messages);
         }
+    }
+
+    public void setSessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            this.sessionId = "stateless";
+            return;
+        }
+        this.sessionId = sessionId;
+    }
+
+    public List<ChatMessage> getChatMessages() {
+        return new ArrayList<>(this.chatMessages);
     }
 
     @Override
@@ -116,7 +130,27 @@ public class LangChain4jRuntime implements AgentRuntime {
                 List<ToolSpecification> toolSpecs = toolAdapter.getToolSpecifications();
                 Response<AiMessage> response;
                 
-                List<ChatMessage> compacted = compactionStrategy.compact(chatMessages);
+                int beforeMessageCount = chatMessages.size();
+                int beforeTokenCount = compactionStrategy.estimateTokenCount(chatMessages);
+                boolean shouldCompact = compactionStrategy.shouldCompact(chatMessages);
+                String reason = compactionStrategy.compactionReason(chatMessages);
+                List<ChatMessage> compacted = shouldCompact
+                        ? compactionStrategy.compact(chatMessages)
+                        : new ArrayList<>(chatMessages);
+                int afterMessageCount = compacted.size();
+                int afterTokenCount = compactionStrategy.estimateTokenCount(compacted);
+
+                if (shouldCompact) {
+                    log.info(
+                            "Compaction triggered. sessionId={}, reason={}, messages:{}->{}, tokens:{}->{}",
+                            sessionId, reason, beforeMessageCount, afterMessageCount, beforeTokenCount, afterTokenCount
+                    );
+                } else {
+                    log.debug(
+                            "Compaction skipped. sessionId={}, reason={}, messages={}, tokens={}",
+                            sessionId, reason, beforeMessageCount, beforeTokenCount
+                    );
+                }
                 log.info("Invoking LangChain4j delegate model (compacted context size: {})...", compacted.size());
                 if (toolSpecs != null && !toolSpecs.isEmpty()) {
                     response = model.generate(compacted, toolSpecs);
@@ -178,41 +212,33 @@ public class LangChain4jRuntime implements AgentRuntime {
 
                 // 3. Process custom tools execution requests
                 if (aiMessage.hasToolExecutionRequests()) {
-                    boolean hasJsonError = false;
+                    ToolCallParsingException fallbackError = null;
                     List<String> repairedArguments = new ArrayList<>();
                     
                     for (dev.langchain4j.agent.tool.ToolExecutionRequest req : aiMessage.toolExecutionRequests()) {
                         String args = req.arguments();
                         if (args != null && !args.trim().isEmpty()) {
                             try {
-                                objectMapper.readTree(args);
-                                repairedArguments.add(args);
-                            } catch (Exception e) {
-                                ToolCallPolicy policy = toolCallPolicy();
-                                if (policy == ToolCallPolicy.STRICT) {
-                                    throw new IllegalArgumentException("Invalid JSON detected in tool arguments under STRICT policy: " + args, e);
-                                } else if (policy == ToolCallPolicy.LENIENT) {
-                                    log.info("Lenient policy: attempting to repair invalid JSON arguments: {}", args);
-                                    String repaired = tryRepairJson(args);
-                                    try {
-                                        objectMapper.readTree(repaired);
-                                        repairedArguments.add(repaired);
-                                        log.info("Successfully repaired invalid JSON to: {}", repaired);
-                                    } catch (Exception ex) {
-                                        throw new IllegalArgumentException("Failed to repair invalid JSON under LENIENT policy: " + args, ex);
-                                    }
-                                } else { // TEXT_FALLBACK
-                                    hasJsonError = true;
+                                repairedArguments.add(validateOrRepairArguments(req, args));
+                            } catch (ToolCallParsingException e) {
+                                if (toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
+                                    fallbackError = e;
                                     break;
                                 }
+                                throw e;
                             }
                         } else {
                             repairedArguments.add(args);
                         }
                     }
 
-                    if (hasJsonError && toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
+                    if (fallbackError != null && toolCallPolicy() == ToolCallPolicy.TEXT_FALLBACK) {
                         log.info("Fallback policy triggered: converting tool call to plain text due to JSON parsing error.");
+                        String fallbackText = text;
+                        if (fallbackText == null || fallbackText.isBlank()) {
+                            fallbackText = "Tool call skipped because arguments were not valid JSON.";
+                        }
+                        fallbackText += "\n[Tool Call Fallback: " + fallbackError.getMessage() + "]";
                         Step fallbackStep = new Step(
                                 "trajectory-lc4j:" + stepIndex,
                                 stepIndex++,
@@ -220,8 +246,8 @@ public class LangChain4jRuntime implements AgentRuntime {
                                 StepSource.MODEL,
                                 StepTarget.USER,
                                 StepStatus.DONE,
-                                text + "\n[Tool Call Failed JSON Parsing: Fallback to text]",
-                                text + "\n[Tool Call Failed JSON Parsing: Fallback to text]",
+                                fallbackText,
+                                fallbackText,
                                 thinking,
                                 thinking,
                                 Collections.emptyList(),
@@ -387,6 +413,45 @@ public class LangChain4jRuntime implements AgentRuntime {
                 log.warn("Failed to parse tool execution request arguments JSON: {}", json, e);
             }
             return Collections.emptyMap();
+        }
+    }
+
+    private String validateOrRepairArguments(
+            dev.langchain4j.agent.tool.ToolExecutionRequest request,
+            String argumentsJson
+    ) {
+        try {
+            objectMapper.readTree(argumentsJson);
+            return argumentsJson;
+        } catch (Exception parseError) {
+            ToolCallPolicy policy = toolCallPolicy();
+            if (policy == ToolCallPolicy.STRICT || policy == ToolCallPolicy.TEXT_FALLBACK) {
+                throw new ToolCallParsingException(
+                        request.name(),
+                        request.id(),
+                        policy,
+                        argumentsJson,
+                        parseError.getMessage(),
+                        parseError
+                );
+            }
+
+            log.info("Lenient policy: attempting to repair invalid JSON arguments: {}", argumentsJson);
+            String repaired = tryRepairJson(argumentsJson);
+            try {
+                objectMapper.readTree(repaired);
+                log.info("Successfully repaired invalid JSON to: {}", repaired);
+                return repaired;
+            } catch (Exception repairError) {
+                throw new ToolCallParsingException(
+                        request.name(),
+                        request.id(),
+                        policy,
+                        argumentsJson,
+                        "lenient repair failed: " + repairError.getMessage(),
+                        repairError
+                );
+            }
         }
     }
 

@@ -21,6 +21,16 @@ jobs:
         cache: maven
         server-id: github
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: false
+
     - name: Build with Maven
       run: mvn -B clean test
 

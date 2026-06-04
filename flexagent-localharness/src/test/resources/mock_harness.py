@@ -3,10 +3,12 @@ import struct
 import json
 import asyncio
 import websockets
+from pathlib import Path
 from google.protobuf import json_format
 
-# Include Python SDK paths for pb imports
-sys.path.insert(0, '/Users/liuyongze/Desktop/sdk/flexagent-sdk-python')
+# Include Python SDK path for protobuf imports (works on CI and local)
+REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT / "flexagent-sdk-python"))
 
 from google.antigravity.connections.local import localharness_pb2
 

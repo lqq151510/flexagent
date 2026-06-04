@@ -20,9 +20,47 @@ public class FlexAgentAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public org.flexagent.core.memory.AgentMemory agentMemory(FlexAgentProperties properties) {
+        FlexAgentProperties.MemoryProperties memProps = properties.getMemory();
+        if ("redis".equalsIgnoreCase(memProps.getType())) {
+            FlexAgentProperties.MemoryProperties.RedisProperties redisProps = memProps.getRedis();
+            
+            redis.clients.jedis.JedisPoolConfig poolConfig = new redis.clients.jedis.JedisPoolConfig();
+            poolConfig.setMaxTotal(16);
+            poolConfig.setMaxIdle(8);
+            
+            redis.clients.jedis.JedisPool jedisPool;
+            if (redisProps.getPassword() != null && !redisProps.getPassword().isEmpty()) {
+                jedisPool = new redis.clients.jedis.JedisPool(
+                        poolConfig,
+                        redisProps.getHost(),
+                        redisProps.getPort(),
+                        redisProps.getTimeout(),
+                        redisProps.getPassword(),
+                        redisProps.getDatabase()
+                );
+            } else {
+                jedisPool = new redis.clients.jedis.JedisPool(
+                        poolConfig,
+                        redisProps.getHost(),
+                        redisProps.getPort(),
+                        redisProps.getTimeout(),
+                        null,
+                        redisProps.getDatabase()
+                );
+            }
+            return new org.flexagent.core.memory.RedisAgentMemory(jedisPool, memProps.getTtl());
+        } else {
+            return new org.flexagent.core.memory.InMemoryAgentMemory(memProps.getTtl());
+        }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public FlexAgentChatModel flexAgentChatModel(
             FlexAgentProperties properties,
             ObjectProvider<ChatLanguageModel> delegateModelProvider,
+            ObjectProvider<org.flexagent.core.memory.AgentMemory> agentMemoryProvider,
             ApplicationContext applicationContext
     ) {
         // 1. Scan for tools in Spring Context
@@ -67,6 +105,11 @@ public class FlexAgentAutoConfiguration {
                 .thinkingMode(properties.getThinkingMode())
                 .toolCallPolicy(properties.getToolCallPolicy())
                 .tools(toolsList.toArray());
+
+        org.flexagent.core.memory.AgentMemory memory = agentMemoryProvider.getIfAvailable();
+        if (memory != null) {
+            builder.memory(memory);
+        }
 
         // Inject delegate model if present
         ChatLanguageModel delegateModel = delegateModelProvider.getIfAvailable();

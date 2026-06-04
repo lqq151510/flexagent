@@ -6,7 +6,7 @@
 
     <groupId>org.flexagent</groupId>
     <artifactId>flexagent-parent</artifactId>
-    <version>0.3.0</version>
+    <version>0.5.0</version>
     <packaging>pom</packaging>
 
     <name>FlexAgent Java SDK Parent</name>
@@ -16,6 +16,8 @@
         <module>flexagent-core</module>
         <module>flexagent-localharness</module>
         <module>flexagent-langchain4j</module>
+        <module>flexagent-spring-ai</module>
+        <module>flexagent-mcp</module>
         <module>flexagent-spring-boot-starter</module>
         <module>flexagent-examples</module>
     </modules>
@@ -30,6 +32,8 @@
         <langchain4j.version>0.31.0</langchain4j.version>
         <slf4j.version>2.0.12</slf4j.version>
         <junit.version>5.10.2</junit.version>
+        <jedis.version>5.1.2</jedis.version>
+        <mockito.version>5.11.0</mockito.version>
     </properties>
 
     <dependencyManagement>
@@ -119,6 +123,27 @@
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${junit.version}</version>
+            </dependency>
+
+            <!-- Redis client -->
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>${jedis.version}</version>
+            </dependency>
+
+            <!-- Mockito -->
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-junit-jupiter</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
