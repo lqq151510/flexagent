@@ -25,8 +25,8 @@ FlexAgent 是一个轻量级 Java Agent Runtime 适配层，用于解耦业务�
 git clone https://github.com/lqq151510/flexagent.git
 cd flexagent
 
-# 编译并运行所有单元测试
-mvn clean test
+# 编译、运行测试并生成覆盖率报告
+mvn -B -ntp clean verify
 ```
 
 ### 2. 运行招牌 DeepSeek 示例
@@ -91,7 +91,7 @@ try (FlexAgentChatModel agent = FlexAgentChatModel.builder()
 
 ## 🧩 开源维护与成熟度
 
-* **持续集成**：每次 push / pull request 都会运行 Maven 构建与测试。
+* **持续集成**：每次 push / pull request 都会运行 Maven `verify`，并上传测试报告与覆盖率报告。
 * **版本记录**：通过 `CHANGELOG.md` 维护每次发布的功能变更与演进说明。
 * **贡献规范**：仓库包含 `CONTRIBUTING.md`、`SECURITY.md` 与 PR 模板，便于外部协作者参与。
 * **模块化交付**：核心、适配器、示例、Spring Boot Starter 分模块维护，便于分层演进与复用。

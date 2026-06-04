@@ -4,6 +4,20 @@
 
 ## [0.6.0-SNAPSHOT] - 2026-06-03
 
+### ✅ CI 与 PR 合并质量
+* GitHub Actions 从 `mvn clean test` 升级为 `mvn -B -ntp clean verify`，让本地验证与 CI gate 保持一致。
+* CI 新增 Surefire 测试报告与 JaCoCo 覆盖率报告 artifacts，便于 PR 失败时快速定位。
+* 修复 tag 发布触发条件：`v*` tag 现在会触发 publish job，并在 verify 通过后执行发布。
+* PR 模板补充验证命令、风险/rollout、文档/changelog 与 reviewer checklist，减少合并前遗漏。
+
+### 🧪 测试覆盖
+* 父 POM 接入 JaCoCo，`verify` 阶段自动生成模块级覆盖率报告。
+* `flexagent-mcp` 新增 `McpToolScannerTest`，验证 MCP mock tool schema 的结构与 required 参数。
+
+### 📖 维护文档
+* `CONTRIBUTING.md`、`MAINTENANCE.md`、`PULL_REQUEST_GUIDELINES.md` 同步为 `mvn -B -ntp clean verify` 验证标准。
+* `ROADMAP.md` 将 v0.6 范围更新为 Memory 产品化、CI 与合并质量。
+
 ### 📖 Spring Boot Memory 产品化
 * 新增 `docs/spring-boot-memory.md`，系统说明 `flexagent.memory.*` 配置项、`in-memory` / `redis` 两种模式、TTL 行为与生产建议。
 * `docs/memory_quickstart.md` 增补 Spring Boot Starter 集成方式，并统一使用当前 Builder API。

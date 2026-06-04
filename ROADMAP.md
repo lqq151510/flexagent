@@ -56,11 +56,14 @@
 
 ---
 
-## 📌 v0.6: Memory 产品化与 Spring Boot 落地 (Current Stage)
-* **目标**：把 v0.5 的 Memory 基础能力沉淀为可直接交付给 Spring Boot 项目的接入体验、文档与回归保障。
+## 📌 v0.6: Memory 产品化、CI 与合并质量 (Current Stage)
+* **目标**：把 v0.5 的 Memory 基础能力沉淀为可直接交付给 Spring Boot 项目的接入体验，同时强化 CI、测试覆盖与 PR 合并质量。
 * **交付内容**：
   * [x] **Spring Boot Memory/Redis 配置文档**：提供完整的 `application.yml` 配置说明、参数表和接入建议。
   * [x] **Redis 使用示例**：补齐 Starter 场景下的 Redis 配置示例与会话验证方法。
   * [x] **Session-Aware Spring Demo**：示例应用支持显式传入 `sessionId`，便于演示多轮隔离。
   * [x] **Starter 层回归测试**：覆盖自动配置后的 session isolation 与 TTL 过期行为。
+  * [x] **CI Verify Gate**：GitHub Actions 升级为 `mvn -B -ntp clean verify`，并上传 Surefire / JaCoCo artifacts。
+  * [x] **PR 合并质量模板**：PR 模板补充验证命令、风险说明、文档/changelog 状态与 reviewer checklist。
+  * [x] **MCP 模块测试补齐**：为 MCP tool schema scanner 增加最小回归测试，避免模块长期无测试。
   * [ ] **生产级增强项**：补充更细粒度的 Memory 观测指标与可配置 Redis key namespace。
