@@ -63,7 +63,7 @@ public class McpClient implements AutoCloseable {
         log.info("Sending MCP initialize request...");
         try {
             CompletableFuture<String> future = sendRequest("initialize", params);
-            String responseStr = future.get(10, TimeUnit.SECONDS);
+            String responseStr = future.get(30, TimeUnit.SECONDS);
             McpProtocol.Response response = mapper.readValue(responseStr, McpProtocol.Response.class);
 
             if (response.error() != null) {

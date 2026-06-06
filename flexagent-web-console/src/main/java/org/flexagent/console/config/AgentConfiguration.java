@@ -18,7 +18,7 @@ public class AgentConfiguration {
     @Bean(destroyMethod = "close")
     public McpClient mcpClient() throws Exception {
         // We'll use npx @modelcontextprotocol/server-everything to provide tools
-        McpClient client = new McpClient("npx", "-y", "@modelcontextprotocol/server-everything", ".");
+        McpClient client = new McpClient("npx", "-y", "@modelcontextprotocol/server-everything");
         client.start();
         return client;
     }
