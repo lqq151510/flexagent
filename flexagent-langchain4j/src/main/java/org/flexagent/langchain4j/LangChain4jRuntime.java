@@ -158,6 +158,14 @@ public class LangChain4jRuntime implements AgentRuntime {
                     response = model.generate(compacted);
                 }
                 
+                if (response.tokenUsage() != null) {
+                    org.flexagent.core.runtime.FlexAgentObservationUtils.recordTokenUsage(
+                            "langchain4j",
+                            response.tokenUsage().inputTokenCount() != null ? response.tokenUsage().inputTokenCount() : 0,
+                            response.tokenUsage().outputTokenCount() != null ? response.tokenUsage().outputTokenCount() : 0
+                    );
+                }
+                
                 AiMessage aiMessage = response.content();
                 chatMessages.add(aiMessage);
 

@@ -119,4 +119,13 @@ public class FlexAgentAutoConfiguration {
 
         return builder.build();
     }
+
+    @Bean
+    @ConditionalOnClass(name = "reactor.core.publisher.Flux")
+    @ConditionalOnMissingBean
+    public org.flexagent.langchain4j.FlexAgentReactiveChatModel flexAgentReactiveChatModel(
+            FlexAgentChatModel delegate
+    ) {
+        return new org.flexagent.langchain4j.FlexAgentReactiveChatModel(delegate);
+    }
 }

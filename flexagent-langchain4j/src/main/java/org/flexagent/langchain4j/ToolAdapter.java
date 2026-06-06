@@ -126,8 +126,14 @@ public class ToolAdapter {
 
         try {
             Object[] args = bindArguments(info.method, call.arguments());
-            Object result = info.method.invoke(info.target, args);
-            return new ToolResult(call.id(), call.name(), result, null);
+            return org.flexagent.core.runtime.FlexAgentObservationUtils.observeToolInvoke(call.name(), () -> {
+                try {
+                    Object result = info.method.invoke(info.target, args);
+                    return new ToolResult(call.id(), call.name(), result, null);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
         } catch (Exception e) {
             log.error("Error executing tool: {}", call.name(), e);
             String errMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();

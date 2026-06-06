@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 public class SpringAiRuntime implements AgentRuntime {
     private static final Logger log = LoggerFactory.getLogger(SpringAiRuntime.class);
@@ -30,6 +32,7 @@ public class SpringAiRuntime implements AgentRuntime {
     private final ChatModel chatModel;
     private final List<Message> chatMessages = new CopyOnWriteArrayList<>();
     private final BlockingQueue<Step> stepQueue = new LinkedBlockingQueue<>();
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     private AgentConfig config;
     private CompactionStrategy<Message> compactionStrategy;
@@ -210,14 +213,19 @@ public class SpringAiRuntime implements AgentRuntime {
 
         @Override
         public String getInputTypeSchema() {
-            // Basic JSON schema mapping based on parameter structure
-            return "{\"type\":\"object\",\"properties\":{}}"; // Placeholder for full JSON schema generator
+            return toolDef.parametersJsonSchema();
         }
 
         @Override
         public String call(String functionArguments) {
             String callId = UUID.randomUUID().toString();
-            Map<String, Object> args = new HashMap<>(); // Needs proper JSON parsing
+            Map<String, Object> args;
+            try {
+                args = mapper.readValue(functionArguments, new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.error("Failed to parse tool call arguments: {}", functionArguments, e);
+                args = Collections.emptyMap();
+            }
 
             ToolCall toolCall = new ToolCall(callId, getName(), args, functionArguments, null);
 

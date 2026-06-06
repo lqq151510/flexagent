@@ -13,6 +13,7 @@ import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.exception.FlexAgentException;
 import org.flexagent.core.memory.compaction.CompactionStrategy;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
+import org.flexagent.core.runtime.FlexAgentObservationUtils;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -24,6 +25,7 @@ import org.flexagent.core.memory.AgentMemory;
 import org.flexagent.core.memory.AgentMessage;
 import org.flexagent.core.memory.AgentSessionContext;
 import org.flexagent.core.model.ToolCall;
+import org.flexagent.core.tool.CustomToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,17 +51,18 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
     private final String thinkingLevel;
     private final String systemInstruction;
     private final List<Object> toolObjects;
-    private final ChatLanguageModel delegateModel;
+    private final Object delegateModel;
     private final AgentRuntime customRuntime;
     private final ThinkingMode thinkingMode;
     private final ToolCallPolicy toolCallPolicy;
     private final CompactionStrategy compactionStrategy;
-    private final AgentMemory memory;
+    final AgentMemory memory;
+    final List<CustomToolExecutor> customToolExecutors;
 
     // Persistent runtime and tool adapter
-    private final AgentRuntime activeRuntime;
-    private final ToolAdapter toolAdapter;
-    private final List<ChatMessage> initialSystemMessages;
+    final AgentRuntime activeRuntime;
+    final ToolAdapter toolAdapter;
+    final List<ChatMessage> initialSystemMessages;
 
     private FlexAgentChatModel(Builder builder) {
         this.binaryPath = builder.binaryPath;
@@ -74,6 +77,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         this.toolCallPolicy = builder.toolCallPolicy;
         this.compactionStrategy = builder.compactionStrategy;
         this.memory = builder.memory;
+        this.customToolExecutors = new ArrayList<>(builder.customToolExecutors);
 
         // Initialize persistent runtime and adapter
         try {
@@ -177,10 +181,13 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         if (hasMemory) {
             List<AgentMessage> agentHistory = this.memory.getMessages(sessionId);
             List<ChatMessage> chatHistory = new ArrayList<>();
-            if (agentHistory != null) {
+            if (agentHistory != null && !agentHistory.isEmpty()) {
+                FlexAgentObservationUtils.recordMemoryHit(sessionId, true);
                 for (AgentMessage am : agentHistory) {
                     chatHistory.add(toChatMessage(am));
                 }
+            } else {
+                FlexAgentObservationUtils.recordMemoryHit(sessionId, false);
             }
 
             // Sync initial stateless history to memory if memory is empty
@@ -225,7 +232,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                 Step step = this.activeRuntime.pollStep(100, TimeUnit.MILLISECONDS);
                 if (step == null) {
                     if (waitFuture.isDone()) {
-                        step = this.activeRuntime.pollStep(10, TimeUnit.MILLISECONDS);
+                        step = this.activeRuntime.pollStep(200, TimeUnit.MILLISECONDS);
                         if (step == null) {
                             break;
                         }
@@ -240,7 +247,16 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                     if (step.type() == org.flexagent.core.model.StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
                         for (org.flexagent.core.model.ToolCall toolCall : step.toolCalls()) {
                             log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                            ToolResult toolResult = this.toolAdapter.execute(toolCall);
+                            ToolResult toolResult = null;
+                            for (CustomToolExecutor executor : this.customToolExecutors) {
+                                if (executor.supports(toolCall.name())) {
+                                    toolResult = executor.execute(toolCall);
+                                    break;
+                                }
+                            }
+                            if (toolResult == null) {
+                                toolResult = this.toolAdapter.execute(toolCall);
+                            }
                             log.info("Tool Result: {}", toolResult);
                             this.activeRuntime.sendToolResult(toolResult);
                         }
@@ -336,7 +352,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return List.copyOf(snapshot);
     }
 
-    private List<ChatMessage> withInitialSystemMessages(List<ChatMessage> messages) {
+    List<ChatMessage> withInitialSystemMessages(List<ChatMessage> messages) {
         List<ChatMessage> history = messages != null ? new ArrayList<>(messages) : new ArrayList<>();
         boolean hasSystem = false;
         for (ChatMessage message : history) {
@@ -354,7 +370,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return history;
     }
 
-    private ChatMessage toChatMessage(AgentMessage msg) {
+    ChatMessage toChatMessage(AgentMessage msg) {
         if (msg == null) {
             return null;
         }
@@ -388,7 +404,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
     }
 
-    private AgentMessage toAgentMessage(ChatMessage msg) {
+    AgentMessage toAgentMessage(ChatMessage msg) {
         if (msg == null) {
             return null;
         }
@@ -437,13 +453,14 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         private String thinkingLevel = "high";
         private String systemInstruction;
         private final List<Object> toolObjects = new ArrayList<>();
-        private ChatLanguageModel delegateModel;
+        private Object delegateModel;
         private AgentRuntime customRuntime;
         private ThinkingMode thinkingMode = ThinkingMode.NONE;
         private ToolCallPolicy toolCallPolicy = ToolCallPolicy.LENIENT;
         private CompactionStrategy<ChatMessage> compactionStrategy;
         private AgentMemory memory;
         private Integer compactionMaxMessages;
+        private final List<CustomToolExecutor> customToolExecutors = new ArrayList<>();
         private Integer compactionMessageThreshold;
         private Integer compactionTokenThreshold;
 
@@ -453,6 +470,13 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
         public Builder memory(AgentMemory memory) {
             this.memory = memory;
+            return this;
+        }
+
+        public Builder customToolExecutor(CustomToolExecutor executor) {
+            if (executor != null) {
+                this.customToolExecutors.add(executor);
+            }
             return this;
         }
 
@@ -509,13 +533,13 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
 
         // Legacy compatibility
-        public Builder delegateModel(ChatLanguageModel delegateModel) {
+        public Builder delegateModel(Object delegateModel) {
             this.delegateModel = delegateModel;
             return this;
         }
 
         // v0.2.0 simplified model injector
-        public Builder model(ChatLanguageModel model) {
+        public Builder model(Object model) {
             this.delegateModel = model;
             return this;
         }
@@ -536,7 +560,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        public Builder langChain4j(ChatLanguageModel model) {
+        public Builder langChain4j(Object model) {
             this.runtimeType = RuntimeTypes.LANGCHAIN4J;
             this.delegateModel = model;
             return this;

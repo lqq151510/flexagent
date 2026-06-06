@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.flexagent.core.model.ToolDefinition;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.List;
 
@@ -15,8 +16,16 @@ class McpToolScannerTest {
 
     @Test
     void fetchToolsReturnsValidToolSchema() throws Exception {
-        McpToolScanner scanner = new McpToolScanner("http://localhost:3000");
+        // Mock McpClient
+        McpClient mcpClient = Mockito.mock(McpClient.class);
+        String mockSchema = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"The search query\"}},\"required\":[\"query\"]}";
+        
+        Mockito.when(mcpClient.isRunning()).thenReturn(true);
+        Mockito.when(mcpClient.listTools()).thenReturn(List.of(
+                new ToolDefinition("mcp_search_knowledge", "Searches the knowledge base on the MCP server.", mockSchema)
+        ));
 
+        McpToolScanner scanner = new McpToolScanner(mcpClient);
         List<ToolDefinition> tools = scanner.fetchTools();
 
         assertEquals(1, tools.size());

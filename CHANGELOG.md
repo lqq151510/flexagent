@@ -2,6 +2,14 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [0.7.0] - 2026-06-06
+
+### 🚀 响应式与可观测性
+* **响应式 API 支持**：引入 Project Reactor，新增 `FlexAgentReactiveChatModel` 桥接，支持 `Flux<AgentMessage>` 非阻塞流式交互。
+* **Spring WebFlux 适配**：在 `flexagent-spring-boot-starter` 自动检测并装配 `FlexAgentReactiveChatModel` Bean。
+* **Micrometer 接入**：在核心层封装 `FlexAgentObservationUtils`，实现对工具调用耗时 (`flexagent.tool.invoke.timer`)、会话记忆命中 (`flexagent.memory.hit`) 与 LLM Token 消耗 (`flexagent.llm.token.usage`) 的自动化监控打点。
+* **v0.4 债务清空**：补齐了 Spring AI 运行时打通（解决参数格式反序列化痛点）及原生 MCP Client（支持进程启停与流式数据交互）。
+
 ## [0.6.0-SNAPSHOT] - 2026-06-03
 
 ### ✅ CI 与 PR 合并质量

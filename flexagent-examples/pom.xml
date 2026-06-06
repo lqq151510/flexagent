@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.flexagent</groupId>
         <artifactId>flexagent-parent</artifactId>
-        <version>0.5.0</version>
+        <version>0.7.0</version>
     </parent>
 
     <artifactId>flexagent-examples</artifactId>
@@ -70,5 +70,40 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- FlexAgent Adapters -->
+        <dependency>
+            <groupId>org.flexagent</groupId>
+            <artifactId>flexagent-spring-ai</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flexagent</groupId>
+            <artifactId>flexagent-mcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring AI Core and OpenAI for demo -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-core</artifactId>
+            <version>1.0.0-M1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+            <version>1.0.0-M1</version>
+        </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 </project>

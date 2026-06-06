@@ -39,8 +39,8 @@
 ## 📌 v0.4: 异构运行时与高级编排
 * **目标**：扩展 Runtime 提供者，并为长对话、多工具链路补齐更强的上下文治理能力。
 * **交付内容**：
-  * [ ] **Spring AI Runtime Provider**：支持将 Spring AI 运行时作为后端的 SPI 提供者。
-  * [ ] **MCP (Model Context Protocol) 运行时支持**：原生对接 MCP 服务端，加载外部通用工具。
+  * [x] **Spring AI Runtime Provider**：支持将 Spring AI 运行时作为后端的 SPI 提供者。
+  * [x] **MCP (Model Context Protocol) 运行时支持**：原生对接 MCP 服务端，加载外部通用工具。
   * [x] **滑动窗口上下文管理增强**：已支持 `SlidingWindow`、`Summary` 与 `ToolAware` 三类压缩策略。
 
 ---
@@ -66,4 +66,13 @@
   * [x] **CI Verify Gate**：GitHub Actions 升级为 `mvn -B -ntp clean verify`，并上传 Surefire / JaCoCo artifacts。
   * [x] **PR 合并质量模板**：PR 模板补充验证命令、风险说明、文档/changelog 状态与 reviewer checklist。
   * [x] **MCP 模块测试补齐**：为 MCP tool schema scanner 增加最小回归测试，避免模块长期无测试。
-  * [ ] **生产级增强项**：补充更细粒度的 Memory 观测指标与可配置 Redis key namespace。
+  * [x] **生产级增强项**：补充更细粒度的 Memory 观测指标与可配置 Redis key namespace。
+
+---
+
+## 📌 v0.7: 响应式架构与可观测性 (Production-Ready 基础)
+* **目标**：迎合高并发场景，提供非阻塞异步 API，并赋予系统“白盒”级别的监控能力。
+* **交付内容**：
+  * [x] **异步与响应式 (Reactive) 支持**：引入 Project Reactor，封装 `FlexAgentReactiveChatModel` 提供 `generateStream()` 方法。
+  * [x] **Spring WebFlux Starter 适配**：在 Starter 中提供条件化装配的 Reactive Model。
+  * [x] **生产级可观测性 (Observability)**：接入 Micrometer，实现工具执行耗时打点、记忆命中率采集与 LLM token 追踪。
