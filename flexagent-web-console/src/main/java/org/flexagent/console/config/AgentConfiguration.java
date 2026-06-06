@@ -1,13 +1,14 @@
 package org.flexagent.console.config;
 
-import org.flexagent.core.Agent;
-import org.flexagent.core.AgentConfig;
-import org.flexagent.core.runtime.AgentRuntime;
-import org.flexagent.core.tool.ToolManager;
+import org.flexagent.core.model.ToolDefinition;
+import org.flexagent.core.runtime.RuntimeTypes;
+import org.flexagent.langchain4j.FlexAgentChatModel;
 import org.flexagent.mcp.McpClient;
 import org.flexagent.mcp.McpToolExecutor;
+import org.flexagent.mcp.McpToolScanner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.ai.openai.OpenAiChatModel;
 
 import java.util.List;
 
@@ -17,28 +18,29 @@ public class AgentConfiguration {
     @Bean(destroyMethod = "close")
     public McpClient mcpClient() throws Exception {
         // We'll use npx @modelcontextprotocol/server-everything to provide tools
-        McpClient client = new McpClient("npx", "-y", "@modelcontextprotocol/server-everything");
+        McpClient client = new McpClient("npx", "-y", "@modelcontextprotocol/server-everything", ".");
         client.start();
         return client;
     }
 
     @Bean
-    public Agent webConsoleAgent(AgentRuntime runtime, McpClient mcpClient) throws Exception {
-        ToolManager toolManager = new ToolManager();
-        
-        // Expose MCP tools to the agent
-        List<String> toolNames = mcpClient.listTools().stream()
-                .map(t -> t.name())
-                .toList();
-        
-        if (!toolNames.isEmpty()) {
-            McpToolExecutor mcpExecutor = new McpToolExecutor(mcpClient, toolNames);
-            toolManager.register(mcpExecutor);
-        }
+    public McpToolExecutor mcpToolExecutor(McpClient mcpClient) throws Exception {
+        McpToolScanner scanner = new McpToolScanner(mcpClient);
+        List<ToolDefinition> mcpTools = scanner.fetchTools();
+        List<String> toolNames = mcpTools.stream().map(ToolDefinition::name).toList();
+        return new McpToolExecutor(mcpClient, toolNames);
+    }
 
-        AgentConfig config = new AgentConfig();
-        config.setSessionId("web-console-session");
-        
-        return new Agent(runtime, toolManager, config);
+    @Bean
+    public FlexAgentChatModel flexAgentChatModel(OpenAiChatModel springAiModel, McpClient mcpClient, McpToolExecutor mcpToolExecutor) throws Exception {
+        McpToolScanner scanner = new McpToolScanner(mcpClient);
+        List<ToolDefinition> mcpTools = scanner.fetchTools();
+
+        return FlexAgentChatModel.builder()
+                .runtime(RuntimeTypes.SPRING_AI)
+                .model(springAiModel)
+                .tools(mcpTools.toArray())
+                .customToolExecutor(mcpToolExecutor)
+                .build();
     }
 }
