@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.Map;
 import java.util.Collections;
+import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -296,6 +297,117 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         } finally {
             AgentSessionContext.clear();
         }
+    }
+
+    public Flux<String> stream(String sessionId, String userMessage) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return stream(List.of(UserMessage.from(userMessage)));
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    public Flux<String> stream(String sessionId, List<ChatMessage> messages) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return stream(messages);
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    public Flux<String> stream(List<ChatMessage> messages) {
+        return Flux.create(emitter -> {
+            String prompt = "";
+            for (ChatMessage message : messages) {
+                if (message instanceof UserMessage userMsg) {
+                    prompt = userMsg.text();
+                }
+            }
+
+            log.info("Generating stream for prompt length: {}", prompt.length());
+
+            String sessionId = AgentSessionContext.get();
+            boolean hasMemory = (this.memory != null && sessionId != null);
+
+            if (hasMemory) {
+                List<AgentMessage> agentHistory = this.memory.getMessages(sessionId);
+                List<ChatMessage> chatHistory = new ArrayList<>();
+                if (agentHistory != null && !agentHistory.isEmpty()) {
+                    FlexAgentObservationUtils.recordMemoryHit(sessionId, true);
+                    for (AgentMessage am : agentHistory) {
+                        chatHistory.add(toChatMessage(am));
+                    }
+                } else {
+                    FlexAgentObservationUtils.recordMemoryHit(sessionId, false);
+                }
+
+                if (chatHistory.isEmpty() && messages != null && messages.size() > 1) {
+                    List<ChatMessage> initialHistory = new ArrayList<>(messages.subList(0, messages.size() - 1));
+                    for (ChatMessage cm : initialHistory) {
+                        this.memory.addMessage(sessionId, toAgentMessage(cm));
+                    }
+                    chatHistory.addAll(initialHistory);
+                }
+
+                chatHistory = withInitialSystemMessages(chatHistory);
+
+                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                    lc4jRuntime.setHistoryMessages(chatHistory);
+                    lc4jRuntime.setSessionId(sessionId);
+                }
+            } else {
+                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                    if (messages != null && messages.size() > 1) {
+                        lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>(messages.subList(0, messages.size() - 1))));
+                    } else {
+                        lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>()));
+                    }
+                    lc4jRuntime.setSessionId(sessionId);
+                }
+            }
+
+            try {
+                AgentMessage resultMessage = this.strategy.executeStream(prompt, this.activeRuntime, toolCall -> {
+                    log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
+                    ToolResult toolResult = null;
+                    for (CustomToolExecutor executor : this.customToolExecutors) {
+                        if (executor.supports(toolCall.name())) {
+                            toolResult = executor.execute(toolCall);
+                            break;
+                        }
+                    }
+                    if (toolResult == null) {
+                        toolResult = this.toolAdapter.execute(toolCall);
+                    }
+                    return toolResult;
+                }, token -> {
+                    emitter.next(token);
+                });
+
+                if (hasMemory) {
+                    if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+                        List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
+                        List<AgentMessage> updatedAgentMessages = new ArrayList<>();
+                        for (ChatMessage cm : updatedMessages) {
+                            updatedAgentMessages.add(toAgentMessage(cm));
+                        }
+                        this.memory.clear(sessionId);
+                        this.memory.addMessages(sessionId, updatedAgentMessages);
+                    } else {
+                        this.memory.addMessage(sessionId, AgentMessage.user(prompt));
+                        this.memory.addMessage(sessionId, AgentMessage.assistant(resultMessage.text()));
+                    }
+                }
+
+                emitter.complete();
+
+            } catch (Exception e) {
+                log.error("Error executing FlexAgent stream", e);
+                emitter.error(new FlexAgentException("FlexAgent stream execution failed: " + e.getMessage(), e));
+            }
+        });
     }
 
     private List<ChatMessage> snapshotInitialSystemMessages() {

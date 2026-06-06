@@ -26,6 +26,11 @@ public class ReActStrategy implements AgentStrategy {
 
     @Override
     public AgentMessage execute(String prompt, AgentRuntime runtime, Function<org.flexagent.core.model.ToolCall, org.flexagent.core.model.ToolResult> toolExecutor) throws IOException {
+        return executeStream(prompt, runtime, toolExecutor, null);
+    }
+
+    @Override
+    public AgentMessage executeStream(String prompt, AgentRuntime runtime, Function<org.flexagent.core.model.ToolCall, org.flexagent.core.model.ToolResult> toolExecutor, java.util.function.Consumer<String> tokenHandler) throws IOException {
         runtime.send(prompt);
 
         // Wait for trajectory to complete in virtual thread
@@ -64,6 +69,13 @@ public class ReActStrategy implements AgentStrategy {
                     throw new IOException("Runtime execution error: " + step.error());
                 }
                 
+                if (step.type() == StepType.STREAM_TOKEN) {
+                    if (tokenHandler != null && step.content() != null) {
+                        tokenHandler.accept(step.content());
+                    }
+                    continue;
+                }
+
                 // Check for tool call requests from the model
                 if (step.type() == StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
                     for (ToolCall toolCall : step.toolCalls()) {

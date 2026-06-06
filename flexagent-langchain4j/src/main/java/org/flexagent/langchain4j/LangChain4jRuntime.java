@@ -152,10 +152,42 @@ public class LangChain4jRuntime implements AgentRuntime {
                     );
                 }
                 log.info("Invoking LangChain4j delegate model (compacted context size: {})...", compacted.size());
-                if (toolSpecs != null && !toolSpecs.isEmpty()) {
-                    response = model.generate(compacted, toolSpecs);
+                
+                if (model instanceof dev.langchain4j.model.chat.StreamingChatLanguageModel streamingModel) {
+                    CompletableFuture<Response<AiMessage>> futureResponse = new CompletableFuture<>();
+                    dev.langchain4j.model.StreamingResponseHandler<AiMessage> handler = new dev.langchain4j.model.StreamingResponseHandler<>() {
+                        @Override
+                        public void onNext(String token) {
+                            try {
+                                stepQueue.put(new Step("trajectory-lc4j:stream", -1, StepType.STREAM_TOKEN, StepSource.MODEL, StepTarget.USER, StepStatus.ACTIVE, token, token, "", "", Collections.emptyList(), null, false, null, null));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+
+                        @Override
+                        public void onComplete(Response<AiMessage> res) {
+                            futureResponse.complete(res);
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            futureResponse.completeExceptionally(error);
+                        }
+                    };
+
+                    if (toolSpecs != null && !toolSpecs.isEmpty()) {
+                        streamingModel.generate(compacted, toolSpecs, handler);
+                    } else {
+                        streamingModel.generate(compacted, handler);
+                    }
+                    response = futureResponse.join();
                 } else {
-                    response = model.generate(compacted);
+                    if (toolSpecs != null && !toolSpecs.isEmpty()) {
+                        response = model.generate(compacted, toolSpecs);
+                    } else {
+                        response = model.generate(compacted);
+                    }
                 }
                 
                 if (response.tokenUsage() != null) {
