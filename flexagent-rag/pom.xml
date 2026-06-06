@@ -10,23 +10,31 @@
         <version>0.8.0</version>
     </parent>
 
-    <artifactId>flexagent-langchain4j</artifactId>
+    <artifactId>flexagent-rag</artifactId>
     <packaging>jar</packaging>
 
-    <name>FlexAgent LangChain4j Adapter</name>
-    <description>LangChain4j model and tool execution adapter layer</description>
+    <name>FlexAgent RAG</name>
+    <description>Retrieval-Augmented Generation (RAG) and Vector Store Abstractions</description>
 
     <dependencies>
-        <!-- Core abstractions -->
         <dependency>
             <groupId>org.flexagent</groupId>
             <artifactId>flexagent-core</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
-        <!-- LangChain4j Core -->
+        <!-- Jackson JSON -->
         <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-core</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Milvus Vector Database -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>2.4.2</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- Logging -->
@@ -47,9 +55,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.flexagent</groupId>
-            <artifactId>flexagent-localharness</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

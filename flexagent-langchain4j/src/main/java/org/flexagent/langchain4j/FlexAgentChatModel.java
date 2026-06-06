@@ -62,6 +62,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
     // Persistent runtime and tool adapter
     final AgentRuntime activeRuntime;
     final ToolAdapter toolAdapter;
+    final org.flexagent.core.strategy.AgentStrategy strategy;
     final List<ChatMessage> initialSystemMessages;
 
     private FlexAgentChatModel(Builder builder) {
@@ -78,6 +79,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         this.compactionStrategy = builder.compactionStrategy;
         this.memory = builder.memory;
         this.customToolExecutors = new ArrayList<>(builder.customToolExecutors);
+        this.strategy = builder.strategy != null ? builder.strategy : new org.flexagent.core.strategy.ReActStrategy();
 
         // Initialize persistent runtime and adapter
         try {
@@ -218,60 +220,21 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
 
         try {
-            this.activeRuntime.send(prompt);
-
-            // Wait for trajectory to complete in virtual thread
-            CompletableFuture<Void> waitFuture = CompletableFuture.runAsync(
-                    this.activeRuntime::waitForIdle,
-                    Executors.newVirtualThreadPerTaskExecutor()
-            );
-
-            StringBuilder contentBuilder = new StringBuilder();
-
-            while (true) {
-                Step step = this.activeRuntime.pollStep(100, TimeUnit.MILLISECONDS);
-                if (step == null) {
-                    if (waitFuture.isDone()) {
-                        step = this.activeRuntime.pollStep(200, TimeUnit.MILLISECONDS);
-                        if (step == null) {
-                            break;
-                        }
+            AgentMessage resultMessage = this.strategy.execute(prompt, this.activeRuntime, toolCall -> {
+                log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
+                ToolResult toolResult = null;
+                for (CustomToolExecutor executor : this.customToolExecutors) {
+                    if (executor.supports(toolCall.name())) {
+                        toolResult = executor.execute(toolCall);
+                        break;
                     }
                 }
-
-                if (step != null) {
-                    if (step.status() == org.flexagent.core.model.StepStatus.ERROR) {
-                        throw new FlexAgentException("Runtime execution error: " + step.error());
-                    }
-                    // Check for tool call requests from the model
-                    if (step.type() == org.flexagent.core.model.StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
-                        for (org.flexagent.core.model.ToolCall toolCall : step.toolCalls()) {
-                            log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                            ToolResult toolResult = null;
-                            for (CustomToolExecutor executor : this.customToolExecutors) {
-                                if (executor.supports(toolCall.name())) {
-                                    toolResult = executor.execute(toolCall);
-                                    break;
-                                }
-                            }
-                            if (toolResult == null) {
-                                toolResult = this.toolAdapter.execute(toolCall);
-                            }
-                            log.info("Tool Result: {}", toolResult);
-                            this.activeRuntime.sendToolResult(toolResult);
-                        }
-                    }
-
-                    if (step.contentDelta() != null && !step.contentDelta().isEmpty()) {
-                        contentBuilder.append(step.contentDelta());
-                    }
-                    if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
-                        log.info("[Thinking] {}", step.thinkingDelta().trim());
-                    }
+                if (toolResult == null) {
+                    toolResult = this.toolAdapter.execute(toolCall);
                 }
-            }
-
-            AiMessage aiMessage = AiMessage.from(contentBuilder.toString());
+                return toolResult;
+            });
+            AiMessage aiMessage = AiMessage.from(resultMessage.text());
 
             // Save conversation history back to memory
             if (hasMemory) {
@@ -286,7 +249,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                 } else {
                     // For non-langchain4j runtime, manually record user prompt and assistant response
                     this.memory.addMessage(sessionId, AgentMessage.user(prompt));
-                    this.memory.addMessage(sessionId, AgentMessage.assistant(contentBuilder.toString()));
+                    this.memory.addMessage(sessionId, AgentMessage.assistant(resultMessage.text()));
                 }
             }
 
@@ -296,7 +259,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             throw e;
         } catch (Exception e) {
             log.error("Error executing FlexAgent Agent Runtime", e);
-            throw new FlexAgentException("FlexAgent agent execution failed", e);
+            throw new FlexAgentException("FlexAgent agent execution failed: " + e.getMessage(), e);
         }
     }
 
@@ -416,13 +379,31 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             if (aiMsg.hasToolExecutionRequests()) {
                 List<ToolCall> toolCalls = new ArrayList<>();
                 for (dev.langchain4j.agent.tool.ToolExecutionRequest req : aiMsg.toolExecutionRequests()) {
-                    toolCalls.add(new ToolCall(
-                            req.id(),
-                            req.name(),
-                            parseJsonToMap(req.arguments()),
-                            req.arguments(),
-                            null
-                    ));
+                    try {
+                        toolCalls.add(new ToolCall(
+                                req.id(),
+                                req.name(),
+                                parseJsonToMapStrict(req.arguments()),
+                                req.arguments(),
+                                null
+                        ));
+                    } catch (Exception e) {
+                        if (this.toolCallPolicy == ToolCallPolicy.TEXT_FALLBACK) {
+                            return AgentMessage.assistant("Tool Call Fallback: " + req.id() + " failed to parse json. " + e.getMessage());
+                        } else if (this.toolCallPolicy == ToolCallPolicy.STRICT) {
+                            throw new RuntimeException("Failed to parse tool call arguments under STRICT policy: " + req.arguments(), e);
+                        } else {
+                            // LENIENT
+                            log.warn("LENIENT: Failed to parse tool call JSON", e);
+                            toolCalls.add(new ToolCall(
+                                    req.id(),
+                                    req.name(),
+                                    Collections.emptyMap(),
+                                    req.arguments(),
+                                    null
+                            ));
+                        }
+                    }
                 }
                 return AgentMessage.assistant(aiMsg.text(), toolCalls);
             }
@@ -434,16 +415,11 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
     }
 
-    private Map<String, Object> parseJsonToMap(String json) {
+    private Map<String, Object> parseJsonToMapStrict(String json) throws Exception {
         if (json == null || json.isEmpty()) {
             return Collections.emptyMap();
         }
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            log.warn("Failed to parse tool call JSON arguments to Map", e);
-            return Collections.emptyMap();
-        }
+        return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
     }
 
     public static class Builder {
@@ -467,6 +443,12 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         // v0.2.0 Streamlined API options
         private String runtimeType;
         private Boolean enableThinkingExtraction;
+        private org.flexagent.core.strategy.AgentStrategy strategy;
+
+        public Builder strategy(org.flexagent.core.strategy.AgentStrategy strategy) {
+            this.strategy = strategy;
+            return this;
+        }
 
         public Builder memory(AgentMemory memory) {
             this.memory = memory;
