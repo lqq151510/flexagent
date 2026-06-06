@@ -153,41 +153,51 @@ public class LangChain4jRuntime implements AgentRuntime {
                 }
                 log.info("Invoking LangChain4j delegate model (compacted context size: {})...", compacted.size());
                 
-                if (model instanceof dev.langchain4j.model.chat.StreamingChatLanguageModel streamingModel) {
-                    CompletableFuture<Response<AiMessage>> futureResponse = new CompletableFuture<>();
-                    dev.langchain4j.model.StreamingResponseHandler<AiMessage> handler = new dev.langchain4j.model.StreamingResponseHandler<>() {
-                        @Override
-                        public void onNext(String token) {
-                            try {
-                                stepQueue.put(new Step("trajectory-lc4j:stream", -1, StepType.STREAM_TOKEN, StepSource.MODEL, StepTarget.USER, StepStatus.ACTIVE, token, token, "", "", Collections.emptyList(), null, false, null, null));
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
+                org.flexagent.core.resilience.RetryPolicy retryPolicy = config != null ? config.getRetryPolicy() : null;
+
+                Callable<Response<AiMessage>> modelCall = () -> {
+                    if (model instanceof dev.langchain4j.model.chat.StreamingChatLanguageModel streamingModel) {
+                        CompletableFuture<Response<AiMessage>> futureResponse = new CompletableFuture<>();
+                        dev.langchain4j.model.StreamingResponseHandler<AiMessage> handler = new dev.langchain4j.model.StreamingResponseHandler<>() {
+                            @Override
+                            public void onNext(String token) {
+                                try {
+                                    stepQueue.put(new Step("trajectory-lc4j:stream", -1, StepType.STREAM_TOKEN, StepSource.MODEL, StepTarget.USER, StepStatus.ACTIVE, token, token, "", "", Collections.emptyList(), null, false, null, null));
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                }
                             }
-                        }
 
-                        @Override
-                        public void onComplete(Response<AiMessage> res) {
-                            futureResponse.complete(res);
-                        }
+                            @Override
+                            public void onComplete(Response<AiMessage> res) {
+                                futureResponse.complete(res);
+                            }
 
-                        @Override
-                        public void onError(Throwable error) {
-                            futureResponse.completeExceptionally(error);
-                        }
-                    };
+                            @Override
+                            public void onError(Throwable error) {
+                                futureResponse.completeExceptionally(error);
+                            }
+                        };
 
-                    if (toolSpecs != null && !toolSpecs.isEmpty()) {
-                        streamingModel.generate(compacted, toolSpecs, handler);
+                        if (toolSpecs != null && !toolSpecs.isEmpty()) {
+                            streamingModel.generate(compacted, toolSpecs, handler);
+                        } else {
+                            streamingModel.generate(compacted, handler);
+                        }
+                        return futureResponse.join();
                     } else {
-                        streamingModel.generate(compacted, handler);
+                        if (toolSpecs != null && !toolSpecs.isEmpty()) {
+                            return model.generate(compacted, toolSpecs);
+                        } else {
+                            return model.generate(compacted);
+                        }
                     }
-                    response = futureResponse.join();
+                };
+
+                if (retryPolicy != null) {
+                    response = retryPolicy.execute(modelCall);
                 } else {
-                    if (toolSpecs != null && !toolSpecs.isEmpty()) {
-                        response = model.generate(compacted, toolSpecs);
-                    } else {
-                        response = model.generate(compacted);
-                    }
+                    response = modelCall.call();
                 }
                 
                 if (response.tokenUsage() != null) {
@@ -196,6 +206,15 @@ public class LangChain4jRuntime implements AgentRuntime {
                             response.tokenUsage().inputTokenCount() != null ? response.tokenUsage().inputTokenCount() : 0,
                             response.tokenUsage().outputTokenCount() != null ? response.tokenUsage().outputTokenCount() : 0
                     );
+                    
+                    if (config != null && config.getUsageTracker() != null) {
+                        config.getUsageTracker().recordUsage(
+                                sessionId,
+                                config.getModelName(),
+                                response.tokenUsage().inputTokenCount() != null ? response.tokenUsage().inputTokenCount() : 0,
+                                response.tokenUsage().outputTokenCount() != null ? response.tokenUsage().outputTokenCount() : 0
+                        );
+                    }
                 }
                 
                 AiMessage aiMessage = response.content();

@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AgentConfig {
+    private String sessionId;
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
     private String binaryPath;
     private String storageDirectory;
     private String modelName = "gemini-3.5-flash";
@@ -90,6 +93,26 @@ public class AgentConfig {
 
     public void setToolCallPolicy(org.flexagent.core.model.ToolCallPolicy toolCallPolicy) {
         this.toolCallPolicy = toolCallPolicy;
+    }
+
+    private org.flexagent.core.resilience.RetryPolicy retryPolicy = new org.flexagent.core.resilience.SimpleRetryPolicy(3, 1000);
+
+    public org.flexagent.core.resilience.RetryPolicy getRetryPolicy() {
+        return retryPolicy;
+    }
+
+    public void setRetryPolicy(org.flexagent.core.resilience.RetryPolicy retryPolicy) {
+        this.retryPolicy = retryPolicy;
+    }
+
+    private org.flexagent.core.runtime.UsageTracker usageTracker = new org.flexagent.core.runtime.LoggingUsageTracker();
+
+    public org.flexagent.core.runtime.UsageTracker getUsageTracker() {
+        return usageTracker;
+    }
+
+    public void setUsageTracker(org.flexagent.core.runtime.UsageTracker usageTracker) {
+        this.usageTracker = usageTracker;
     }
 }
 

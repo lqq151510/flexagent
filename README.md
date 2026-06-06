@@ -46,11 +46,13 @@ mvn -pl flexagent-examples exec:java -Dexec.mainClass="org.flexagent.examples.De
 
 ## 🌟 核心特性 (Key Features)
 
-* **可插拔 Runtime SPI**：底层提供核心 `AgentRuntime` 接口。你可以使用 `LangChain4j` 原生驱动，也可以无缝切换至实验性的 `localharness` 外部引擎调试，而无需修改任何业务代码。
-* **业务工具彻底解耦**：将业务层的 `@Tool` 注解方法抽象转化为通用的 `ToolDefinition`，底层适配器根据实际运行时进行参数映射，未来引入 Spring AI 时工具类无需重写。
-* **推理 `<think>` 标签流式回溯解析**：针对 DeepSeek-R1 等推理模型，在流式接收过程中通过内置状态机精准分段剥离 `ThinkingDelta` 与 `TextDelta`，无惧网络分片导致的标签切碎或未闭合。
-* **ToolCall 容灾策略**：内置 `STRICT`、`LENIENT` 和 `TEXT_FALLBACK` 策略，轻松应对模型生成的 JSON 幻觉和破碎参数输出。
-* **Session Memory 与 TTL**：支持 `InMemoryAgentMemory` 与 `RedisAgentMemory`，可按 `sessionId` 进行会话隔离、跨请求记忆与过期清理。
+- **Decoupled Architecture**: Define agents and tools independently of the underlying LLM provider.
+- **Multiple Providers**: Built-in support for LangChain4j, Spring AI, and local testing harnesses.
+- **Advanced Memory**: Built-in `SlidingWindowMemory` and `SummarizationMemory` to prevent context explosion.
+- **Multi-Agent Orchestration**: Out-of-the-box `RouterStrategy` and `SupervisorStrategy` for Swarm-like task delegation.
+- **Reactive Streaming**: First-class support for Spring WebFlux and SSE via `Flux<String>`.
+- **Resilience & Observability**: Configurable `RetryPolicy` and `UsageTracker` to monitor token costs and handle rate limits.
+- **Spring Boot Starter**: Auto-configuration with `@EnableFlexAgent`.
 
 ### 极简 Builder 示例
 

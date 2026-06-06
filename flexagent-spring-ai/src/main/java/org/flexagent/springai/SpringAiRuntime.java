@@ -88,6 +88,7 @@ public class SpringAiRuntime implements AgentRuntime {
     }
 
     private void runAgentLoop() {
+        boolean isStreaming = false;
         try {
             List<Message> messagesToSend = chatMessages;
             if (compactionStrategy != null && compactionStrategy.shouldCompact(chatMessages)) {
@@ -113,42 +114,156 @@ public class SpringAiRuntime implements AgentRuntime {
                 prompt = new Prompt(messagesToSend);
             }
 
-            ChatResponse response = chatModel.call(prompt);
-            AssistantMessage assistantMessage = response.getResult().getOutput();
-            chatMessages.add(assistantMessage);
+            if (chatModel instanceof org.springframework.ai.chat.model.StreamingChatModel streamingChatModel && streamingChatModel.stream(prompt) != null) {
+                reactor.core.publisher.Flux<ChatResponse> flux = streamingChatModel.stream(prompt);
+                isStreaming = true;
+                
+                StringBuilder fullTextBuilder = new StringBuilder();
+                
+                flux.doOnNext(chunk -> {
+                    if (chunk.getResult() != null && chunk.getResult().getOutput() != null) {
+                        String content = chunk.getResult().getOutput().getContent();
+                        if (content != null && !content.isEmpty()) {
+                            fullTextBuilder.append(content);
+                            try {
+                                Step tokenStep = new Step(
+                                        "trajectory-springai-token:" + stepIndex,
+                                        stepIndex,
+                                        StepType.STREAM_TOKEN,
+                                        StepSource.MODEL,
+                                        StepTarget.USER,
+                                        StepStatus.ACTIVE,
+                                        content, content, "", "",
+                                        Collections.emptyList(), null, false, null, null
+                                );
+                                stepQueue.put(tokenStep);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        
+                        if (chunk.getMetadata() != null && chunk.getMetadata().getUsage() != null) {
+                            org.springframework.ai.chat.metadata.Usage usage = chunk.getMetadata().getUsage();
+                            org.flexagent.core.runtime.FlexAgentObservationUtils.recordTokenUsage(
+                                    "spring-ai",
+                                    usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0,
+                                    usage.getGenerationTokens() != null ? usage.getGenerationTokens().intValue() : 0
+                            );
+                            
+                            if (config != null && config.getUsageTracker() != null) {
+                                config.getUsageTracker().recordUsage(
+                                        config.getSessionId(),
+                                        config.getModelName(),
+                                        usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0,
+                                        usage.getGenerationTokens() != null ? usage.getGenerationTokens().intValue() : 0
+                                );
+                            }
+                        }
+                    }
+                }).doOnComplete(() -> {
+                    String rawText = fullTextBuilder.toString();
+                    String thinking = "";
+                    String text = rawText;
 
-            String rawText = assistantMessage.getContent();
-            String thinking = "";
-            String text = rawText != null ? rawText : "";
+                    if (!rawText.isEmpty()) {
+                        XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
+                        List<AgentEvent> events = extractor.extract(rawText);
+                        StringBuilder tBuilder = new StringBuilder();
+                        StringBuilder txtBuilder = new StringBuilder();
+                        for (AgentEvent event : events) {
+                            if (event instanceof ThinkingDelta td) {
+                                tBuilder.append(td.text());
+                            } else if (event instanceof TextDelta td) {
+                                txtBuilder.append(td.text());
+                            }
+                        }
+                        thinking = tBuilder.toString();
+                        text = txtBuilder.toString();
+                    }
+                    
+                    chatMessages.add(new AssistantMessage(rawText));
 
-            if (rawText != null && !rawText.isEmpty()) {
-                XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
-                List<AgentEvent> events = extractor.extract(rawText);
-                StringBuilder thinkingBuilder = new StringBuilder();
-                StringBuilder textBuilder = new StringBuilder();
-                for (AgentEvent event : events) {
-                    if (event instanceof ThinkingDelta td) {
-                        thinkingBuilder.append(td.text());
-                    } else if (event instanceof TextDelta td) {
-                        textBuilder.append(td.text());
+                    Step responseStep = new Step(
+                            "trajectory-springai:" + stepIndex,
+                            stepIndex++,
+                            StepType.TEXT_RESPONSE,
+                            StepSource.MODEL,
+                            StepTarget.USER,
+                            StepStatus.DONE,
+                            text, text, thinking, thinking,
+                            Collections.emptyList(), null, true, null, null
+                    );
+                    try {
+                        stepQueue.put(responseStep);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    idleFuture.complete(null);
+                }).doOnError(e -> {
+                    log.error("Spring AI loop error (streaming)", e);
+                    try {
+                        stepQueue.put(new Step("error", -1, StepType.UNKNOWN, StepSource.MODEL, StepTarget.USER, StepStatus.ERROR, "", "", "", "", Collections.emptyList(), e.getMessage(), true, null, null));
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                    idleFuture.complete(null);
+                }).subscribe();
+            } else {
+                ChatResponse response = chatModel.call(prompt);
+                
+                if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+                    org.springframework.ai.chat.metadata.Usage usage = response.getMetadata().getUsage();
+                    org.flexagent.core.runtime.FlexAgentObservationUtils.recordTokenUsage(
+                            "spring-ai",
+                            usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0,
+                            usage.getGenerationTokens() != null ? usage.getGenerationTokens().intValue() : 0
+                    );
+                    
+                    if (config != null && config.getUsageTracker() != null) {
+                        config.getUsageTracker().recordUsage(
+                                config.getSessionId(),
+                                config.getModelName(),
+                                usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0,
+                                usage.getGenerationTokens() != null ? usage.getGenerationTokens().intValue() : 0
+                        );
                     }
                 }
-                thinking = thinkingBuilder.toString();
-                text = textBuilder.toString();
-            }
 
-            // Put text response into queue
-            Step responseStep = new Step(
-                    "trajectory-springai:" + stepIndex,
-                    stepIndex++,
-                    StepType.TEXT_RESPONSE,
-                    StepSource.MODEL,
-                    StepTarget.USER,
-                    StepStatus.DONE,
-                    text, text, thinking, thinking,
-                    Collections.emptyList(), null, true, null, null
-            );
-            stepQueue.put(responseStep);
+                AssistantMessage assistantMessage = response.getResult().getOutput();
+                chatMessages.add(assistantMessage);
+
+                String rawText = assistantMessage.getContent();
+                String thinking = "";
+                String text = rawText != null ? rawText : "";
+
+                if (rawText != null && !rawText.isEmpty()) {
+                    XmlThinkTagExtractor extractor = new XmlThinkTagExtractor();
+                    List<AgentEvent> events = extractor.extract(rawText);
+                    StringBuilder thinkingBuilder = new StringBuilder();
+                    StringBuilder textBuilder = new StringBuilder();
+                    for (AgentEvent event : events) {
+                        if (event instanceof ThinkingDelta td) {
+                            thinkingBuilder.append(td.text());
+                        } else if (event instanceof TextDelta td) {
+                            textBuilder.append(td.text());
+                        }
+                    }
+                    thinking = thinkingBuilder.toString();
+                    text = textBuilder.toString();
+                }
+
+                Step responseStep = new Step(
+                        "trajectory-springai:" + stepIndex,
+                        stepIndex++,
+                        StepType.TEXT_RESPONSE,
+                        StepSource.MODEL,
+                        StepTarget.USER,
+                        StepStatus.DONE,
+                        text, text, thinking, thinking,
+                        Collections.emptyList(), null, true, null, null
+                );
+                stepQueue.put(responseStep);
+            }
 
         } catch (Exception e) {
             log.error("Spring AI loop error", e);
@@ -158,7 +273,9 @@ public class SpringAiRuntime implements AgentRuntime {
                 Thread.currentThread().interrupt();
             }
         } finally {
-            idleFuture.complete(null);
+            if (!isStreaming) {
+                idleFuture.complete(null);
+            }
         }
     }
 

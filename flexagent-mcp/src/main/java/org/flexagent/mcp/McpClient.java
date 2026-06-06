@@ -7,61 +7,47 @@ import org.flexagent.core.model.ToolDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A native, lightweight Model Context Protocol (MCP) Client.
- * Communicates with MCP Servers over standard input/output (stdio) using JSON-RPC 2.0.
+ * Communicates with MCP Servers using a transport mechanism (e.g. stdio or SSE).
  */
 public class McpClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(McpClient.class);
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    private final List<String> command;
-    private final Map<Long, CompletableFuture<McpProtocol.Response>> pendingRequests = new ConcurrentHashMap<>();
+    private final McpTransport transport;
+    private final Map<Long, CompletableFuture<String>> pendingRequests = new ConcurrentHashMap<>();
     private final AtomicLong requestIdGenerator = new AtomicLong(1);
-
-    private Process process;
-    private BufferedWriter writer;
-    private BufferedReader reader;
     private volatile boolean running = false;
-    private Thread stdoutThread;
-    private Thread stderrThread;
-    private final List<String> lastStderrLines = new CopyOnWriteArrayList<>();
+
+    public McpClient(McpTransport transport) {
+        this.transport = transport;
+        this.transport.setResponseHandler(this::handleResponse);
+    }
 
     public McpClient(List<String> command) {
-        this.command = new ArrayList<>(command);
+        this(new StdioMcpTransport(new ArrayList<>(command)));
     }
 
     public McpClient(String... command) {
-        this.command = Arrays.asList(command);
+        this(new StdioMcpTransport(Arrays.asList(command)));
     }
 
     /**
-     * Starts the MCP server process and establishes stdio connections.
+     * Starts the MCP server process and establishes connections.
      */
     public synchronized void start() throws IOException {
         if (running) {
             return;
         }
 
-        log.info("Starting MCP Server process: {}", command);
-        ProcessBuilder builder = new ProcessBuilder(command);
-        this.process = builder.start();
-
-        this.writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
-        this.reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+        transport.start();
         this.running = true;
-
-        // Start asynchronous stdout reader thread
-        this.stdoutThread = Thread.ofVirtual().name("mcp-client-stdout").start(this::readStdoutLoop);
-
-        // Start asynchronous stderr reader thread to prevent process hanging
-        this.stderrThread = Thread.ofVirtual().name("mcp-client-stderr").start(this::readStderrLoop);
 
         // Perform MCP protocol handshake
         initializeHandshake();
@@ -76,8 +62,9 @@ public class McpClient implements AutoCloseable {
 
         log.info("Sending MCP initialize request...");
         try {
-            CompletableFuture<McpProtocol.Response> future = sendRequest("initialize", params);
-            McpProtocol.Response response = future.get(10, TimeUnit.SECONDS);
+            CompletableFuture<String> future = sendRequest("initialize", params);
+            String responseStr = future.get(10, TimeUnit.SECONDS);
+            McpProtocol.Response response = mapper.readValue(responseStr, McpProtocol.Response.class);
 
             if (response.error() != null) {
                 throw new IOException("MCP initialize failed: " + response.error().message());
@@ -108,8 +95,9 @@ public class McpClient implements AutoCloseable {
     public List<ToolDefinition> listTools() throws IOException {
         log.info("Fetching tools from MCP Server...");
         try {
-            CompletableFuture<McpProtocol.Response> future = sendRequest("tools/list", Collections.emptyMap());
-            McpProtocol.Response response = future.get(10, TimeUnit.SECONDS);
+            CompletableFuture<String> future = sendRequest("tools/list", Collections.emptyMap());
+            String responseStr = future.get(10, TimeUnit.SECONDS);
+            McpProtocol.Response response = mapper.readValue(responseStr, McpProtocol.Response.class);
 
             if (response.error() != null) {
                 throw new IOException("Failed to list tools: " + response.error().message());
@@ -148,8 +136,9 @@ public class McpClient implements AutoCloseable {
         McpProtocol.CallToolParams params = new McpProtocol.CallToolParams(name, arguments);
 
         try {
-            CompletableFuture<McpProtocol.Response> future = sendRequest("tools/call", params);
-            McpProtocol.Response response = future.get(30, TimeUnit.SECONDS); // Support longer tool execution time
+            CompletableFuture<String> future = sendRequest("tools/call", params);
+            String responseStr = future.get(30, TimeUnit.SECONDS); // Support longer tool execution time
+            McpProtocol.Response response = mapper.readValue(responseStr, McpProtocol.Response.class);
 
             if (response.error() != null) {
                 throw new IOException("MCP tool call returned error: " + response.error().message());
@@ -180,21 +169,17 @@ public class McpClient implements AutoCloseable {
         }
     }
 
-    private CompletableFuture<McpProtocol.Response> sendRequest(String method, Object params) throws IOException {
+    private CompletableFuture<String> sendRequest(String method, Object params) throws IOException {
         long id = requestIdGenerator.getAndIncrement();
         McpProtocol.Request request = McpProtocol.Request.create(id, method, params);
 
-        CompletableFuture<McpProtocol.Response> future = new CompletableFuture<>();
+        CompletableFuture<String> future = new CompletableFuture<>();
         pendingRequests.put(id, future);
 
         String json = mapper.writeValueAsString(request);
         log.debug("Sending JSON-RPC request: {}", json);
 
-        synchronized (writer) {
-            writer.write(json);
-            writer.newLine();
-            writer.flush();
-        }
+        transport.sendRequest(json);
 
         return future;
     }
@@ -204,91 +189,43 @@ public class McpClient implements AutoCloseable {
         String json = mapper.writeValueAsString(notification);
         log.debug("Sending JSON-RPC notification: {}", json);
 
-        synchronized (writer) {
-            writer.write(json);
-            writer.newLine();
-            writer.flush();
-        }
+        transport.sendRequest(json);
     }
 
-    private void readStdoutLoop() {
+    public void handleResponse(String line) {
+        log.debug("Received JSON-RPC line: {}", line);
+
         try {
-            String line;
-            while (running && (line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty()) {
-                    continue;
-                }
-                log.debug("Received JSON-RPC line: {}", line);
-
-                try {
-                    McpProtocol.Response response = mapper.readValue(line, McpProtocol.Response.class);
-                    if (response.id() != null && !response.id().isNull()) {
-                        long id;
-                        if (response.id().isNumber()) {
-                            id = response.id().asLong();
-                        } else {
-                            try {
-                                id = Long.parseLong(response.id().asText());
-                            } catch (NumberFormatException e) {
-                                log.warn("Received response with non-numeric id: {}", response.id());
-                                continue;
-                            }
-                        }
-                        CompletableFuture<McpProtocol.Response> future = pendingRequests.remove(id);
-                        if (future != null) {
-                            future.complete(response);
-                        } else {
-                            log.warn("Received response for untracked request id: {}", id);
-                        }
+            JsonNode rootNode = mapper.readTree(line);
+            JsonNode idNode = rootNode.get("id");
+            
+            if (idNode != null && !idNode.isNull()) {
+                long id;
+                if (idNode.isNumber()) {
+                    id = idNode.asLong();
+                } else {
+                    try {
+                        id = Long.parseLong(idNode.asText());
+                    } catch (NumberFormatException e) {
+                        log.warn("Received response with non-numeric id: {}", idNode);
+                        return;
                     }
-                } catch (Exception e) {
-                    log.error("Failed to parse incoming JSON-RPC response line: {}", line, e);
+                }
+                CompletableFuture<String> future = pendingRequests.remove(id);
+                if (future != null) {
+                    future.complete(line);
+                } else {
+                    log.warn("Received response for untracked request id: {}", id);
                 }
             }
-        } catch (IOException e) {
-            if (running) {
-                log.error("Error reading MCP stdout", e);
-            }
-        } finally {
-            cleanupPendingRequests("Connection closed");
-        }
-    }
-
-    private void readStderrLoop() {
-        try (BufferedReader stderrReader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while (running && (line = stderrReader.readLine()) != null) {
-                log.info("MCP Server [Stderr]: {}", line);
-                if (lastStderrLines.size() >= 10) {
-                    lastStderrLines.remove(0);
-                }
-                lastStderrLines.add(line);
-            }
-        } catch (IOException e) {
-            if (running) {
-                log.debug("Error reading MCP stderr", e);
-            }
+        } catch (Exception e) {
+            log.error("Failed to parse incoming JSON-RPC response line: {}", line, e);
         }
     }
 
     private void cleanupPendingRequests(String reason) {
-        int exitCode = -1;
-        if (process != null && !process.isAlive()) {
-            exitCode = process.exitValue();
-        }
-
-        StringBuilder errMsg = new StringBuilder("MCP Client shut down: ").append(reason);
-        if (exitCode != -1) {
-            errMsg.append(" (Process exited with code ").append(exitCode).append(")");
-            if (!lastStderrLines.isEmpty()) {
-                errMsg.append(". Last error trace: ").append(String.join(" | ", lastStderrLines));
-            }
-        }
-
-        String finalError = errMsg.toString();
-        for (CompletableFuture<McpProtocol.Response> future : pendingRequests.values()) {
+        String finalError = "MCP Client shut down: " + reason;
+        for (CompletableFuture<String> future : pendingRequests.values()) {
             future.completeExceptionally(new IOException(finalError));
         }
         pendingRequests.clear();
@@ -299,28 +236,7 @@ public class McpClient implements AutoCloseable {
         running = false;
         log.info("Closing MCP Client...");
 
-        if (process != null) {
-            process.destroy();
-            try {
-                if (!process.waitFor(3, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-            }
-        }
-
-        if (writer != null) {
-            try {
-                writer.close();
-            } catch (IOException ignored) {}
-        }
-        if (reader != null) {
-            try {
-                reader.close();
-            } catch (IOException ignored) {}
-        }
+        transport.close();
 
         cleanupPendingRequests("Client closed");
         log.info("MCP Client successfully closed.");
@@ -328,6 +244,6 @@ public class McpClient implements AutoCloseable {
 
     // Diagnostic/Testing getter
     public boolean isRunning() {
-        return running && process != null && process.isAlive();
+        return running;
     }
 }

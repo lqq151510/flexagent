@@ -79,4 +79,42 @@ public class SpringAiRuntimeTest {
         ToolResult result = new ToolResult(tc.id(), tc.name(), "北京天气晴朗", null);
         runtime.sendToolResult(result);
     }
+
+    public interface StreamingChatModelMock extends ChatModel, org.springframework.ai.chat.model.StreamingChatModel {}
+
+    @Test
+    public void testStreamingResponse() throws Exception {
+        StreamingChatModelMock streamingChatModel = Mockito.mock(StreamingChatModelMock.class);
+        
+        org.springframework.ai.chat.model.ChatResponse chunk1 = new org.springframework.ai.chat.model.ChatResponse(
+            List.of(new org.springframework.ai.chat.model.Generation("Hello "))
+        );
+        org.springframework.ai.chat.model.ChatResponse chunk2 = new org.springframework.ai.chat.model.ChatResponse(
+            List.of(new org.springframework.ai.chat.model.Generation("World!"))
+        );
+        
+        Mockito.when(streamingChatModel.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+               .thenReturn(reactor.core.publisher.Flux.just(chunk1, chunk2));
+
+        SpringAiRuntime streamingRuntime = new SpringAiRuntime(streamingChatModel);
+        AgentConfig config = new AgentConfig();
+        streamingRuntime.initialize(config);
+        
+        streamingRuntime.send("Say hi");
+        
+        org.flexagent.core.model.Step step1 = streamingRuntime.pollStep(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertNotNull(step1);
+        assertEquals(org.flexagent.core.model.StepType.STREAM_TOKEN, step1.type());
+        assertEquals("Hello ", step1.content());
+        
+        org.flexagent.core.model.Step step2 = streamingRuntime.pollStep(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertNotNull(step2);
+        assertEquals(org.flexagent.core.model.StepType.STREAM_TOKEN, step2.type());
+        assertEquals("World!", step2.content());
+        
+        org.flexagent.core.model.Step step3 = streamingRuntime.pollStep(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertNotNull(step3);
+        assertEquals(org.flexagent.core.model.StepType.TEXT_RESPONSE, step3.type());
+        assertEquals("Hello World!", step3.content());
+    }
 }
