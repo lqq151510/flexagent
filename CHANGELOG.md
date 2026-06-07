@@ -2,6 +2,22 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [1.1.0] - 2026-06-07
+
+### 🚀 多智能体编排与测评生态
+* **Multi-Agent 编排**：新增 `AgentProfile`、`GroupChat` 和 `MessageBus`，支持声明式多智能体群聊。
+* **分级任务树**：新增 `HierarchicalStrategy` 主子代理委派策略，解决大模型上下文过载问题。
+* **Python SDK 全面对齐**：`flexagent-sdk-python` 达成全核心特性对齐，包括 LLM Streaming 抽象、`@tool` 沙箱执行机制和滑动窗口记忆管理。
+* **评测体系 (Benchmarking)**：新增 `flexagent-benchmark` 模块，提供 `DatasetLoader` 和 `AgentEvaluator` 自动统计大模型工具调用成功率。
+
+## [1.0.0] - 2026-06-06
+
+### 🚀 稳定版与 Web Console RAG 引擎集成
+* **Web 控制台重构**：提供基于 SSE 流式更新的多轮对话 UI 与动态加载动画。
+* **MCP/RAG 动态装配面板**：前端支持可视化修改 MCP 命令与向量库链接，后端动态重载相关组件。
+* **RAG 向量数据库支持**：`flexagent-rag` 模块新增 `InMemoryVectorStore` 和 `MilvusVectorStore` 的热插拔支持。
+* **生产级增强**：Spring AI 流式输出对齐、MCP 异步交互重构及使用监控。
+
 ## [0.7.0] - 2026-06-06
 
 ### 🚀 响应式与可观测性

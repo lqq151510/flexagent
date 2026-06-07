@@ -2,6 +2,8 @@ const chatContainer = document.getElementById('chat-container');
 const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 
+const sessionId = Math.random().toString(36).substring(2, 15);
+
 // Auto-resize textarea
 messageInput.addEventListener('input', function() {
     this.style.height = 'auto';
@@ -98,7 +100,7 @@ async function sendMessage() {
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream'
             },
-            body: JSON.stringify({ message: text })
+            body: JSON.stringify({ message: text, sessionId: sessionId })
         });
         
         const reader = response.body.getReader();
@@ -129,7 +131,7 @@ async function sendMessage() {
                             toolBadge.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg> Calling tool...`;
                             botContent.insertBefore(toolBadge, textContainer);
                         } 
-                        else if (step.type === 'TOOL_CALL' && step.status === 'SUCCESS' && step.content === 'TOOL_DONE') {
+                        else if (step.type === 'TOOL_CALL' && step.status === 'DONE' && step.content === 'TOOL_DONE') {
                             // tool finished
                             const badges = botContent.querySelectorAll('.tool-call');
                             if (badges.length > 0) {
@@ -197,3 +199,92 @@ async function sendMessage() {
         textContainer.innerHTML += `<br><span style="color: #ef4444;">Connection failed.</span>`;
     }
 }
+
+// Settings logic
+const settingsBtn = document.getElementById('settings-btn');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const settingsOverlay = document.getElementById('settings-overlay');
+const settingsPanel = document.getElementById('settings-panel');
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabPanes = document.querySelectorAll('.tab-pane');
+
+const mcpCommandInput = document.getElementById('mcp-command');
+const mcpArgsInput = document.getElementById('mcp-args');
+const saveMcpBtn = document.getElementById('save-mcp-btn');
+
+const ragEndpointInput = document.getElementById('rag-endpoint');
+const ragCollectionInput = document.getElementById('rag-collection');
+const saveRagBtn = document.getElementById('save-rag-btn');
+
+function toggleSettings() {
+    settingsOverlay.classList.toggle('active');
+    settingsPanel.classList.toggle('active');
+}
+
+settingsBtn.addEventListener('click', toggleSettings);
+closeSettingsBtn.addEventListener('click', toggleSettings);
+settingsOverlay.addEventListener('click', toggleSettings);
+
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabPanes.forEach(p => p.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-tab');
+        document.getElementById(targetId).classList.add('active');
+    });
+});
+
+saveMcpBtn.addEventListener('click', async () => {
+    const command = mcpCommandInput.value.trim();
+    const argsStr = mcpArgsInput.value.trim();
+    const args = argsStr ? argsStr.split(',').map(s => s.trim()) : [];
+    
+    try {
+        const res = await fetch('/api/config/mcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command, args })
+        });
+        if (res.ok) {
+            saveMcpBtn.textContent = 'Saved!';
+            saveMcpBtn.style.backgroundColor = '#10b981';
+            setTimeout(() => {
+                saveMcpBtn.textContent = 'Save MCP Config';
+                saveMcpBtn.style.backgroundColor = '';
+            }, 2000);
+        } else {
+            alert('Failed to save MCP config');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Failed to save MCP config');
+    }
+});
+
+saveRagBtn.addEventListener('click', async () => {
+    const endpoint = ragEndpointInput.value.trim();
+    const collectionName = ragCollectionInput.value.trim();
+    
+    try {
+        const res = await fetch('/api/config/rag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint, collectionName })
+        });
+        if (res.ok) {
+            saveRagBtn.textContent = 'Saved!';
+            saveRagBtn.style.backgroundColor = '#10b981';
+            setTimeout(() => {
+                saveRagBtn.textContent = 'Save RAG Config';
+                saveRagBtn.style.backgroundColor = '';
+            }, 2000);
+        } else {
+            alert('Failed to save RAG config');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Failed to save RAG config');
+    }
+});

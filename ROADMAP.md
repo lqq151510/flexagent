@@ -70,9 +70,36 @@
 
 ---
 
-## 📌 v0.7: 响应式架构与可观测性 (Production-Ready 基础)
+## 📌 v0.7: 响应式架构与可观测性
 * **目标**：迎合高并发场景，提供非阻塞异步 API，并赋予系统“白盒”级别的监控能力。
 * **交付内容**：
   * [x] **异步与响应式 (Reactive) 支持**：引入 Project Reactor，封装 `FlexAgentReactiveChatModel` 提供 `generateStream()` 方法。
   * [x] **Spring WebFlux Starter 适配**：在 Starter 中提供条件化装配的 Reactive Model。
   * [x] **生产级可观测性 (Observability)**：接入 Micrometer，实现工具执行耗时打点、记忆命中率采集与 LLM token 追踪。
+
+---
+
+## 📌 v1.0: 稳定版与 Web Console/RAG 引擎集成
+* **目标**：提供开箱即用的前端可视化监控、多轮对话界面以及正式打通检索引擎，实现核心框架的稳定 (Stable API)。
+* **交付内容**：
+  * [x] **Web 控制台重构**：提供基于 SSE 流式更新的多轮对话 UI 与动态加载动画。
+  * [x] **MCP/RAG 动态装配面板**：前端支持可视化修改 MCP 命令与向量库链接，后端动态重载相关组件。
+  * [x] **RAG VectorStore 抽象与实现**：在 `flexagent-rag` 模块下完成 `InMemoryVectorStore` 和 `MilvusVectorStore` 的热插拔支持与工具封装。
+
+---
+
+## 📌 v1.1: Multi-Agent 多智能体编排与复杂流 (Current Stage)
+* **目标**：从单体闭环迈向企业级复杂任务流，实现多 Agent 协同和组聊机制。
+* **交付内容**：
+  * [x] **AgentProfile 与 MessageBus**：定义多智能体身份配置，建立全生命周期的事件/消息总线（广播与点对点分发）。
+  * [x] **GroupChat 模式**：基于发言轮转逻辑或 Supervisor 主管调度的群聊架构，支持多智能体自由辩论和协同解题。
+  * [x] **HierarchicalStrategy (子代理树)**：扩充 `AgentStrategy` 支持自动在主线程派生子代理执行并汇总结果。
+  * [x] **声明式集群节点 (@FlexAgent)**：在 Spring Boot Starter 中支持通过注解自动注册系统内多个相互协作的编排节点。
+
+---
+
+## 📌 v1.2: 评测体系与跨端生态拓展
+* **目标**：实现可插拔的测评套件与 Python SDK 生态延伸。
+* **交付内容**：
+  * [ ] **Python SDK (flexagent-sdk-python)**：提供与 Java 版一致的核心理念和跨端互通机制。
+  * [ ] **评测与 Benchmarking 模块**：集成标准数据集评估智能体在实际工程任务上的决策准确率和 API 容错率。

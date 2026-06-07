@@ -11,8 +11,13 @@
     <div class="app-container">
         <header class="header">
             <div class="logo">FlexAgent Console</div>
-            <div class="status-indicator">
-                <span class="dot"></span> Online
+            <div class="header-right">
+                <div class="status-indicator">
+                    <span class="dot"></span> Online
+                </div>
+                <button id="settings-btn" class="icon-btn" title="Settings">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
             </div>
         </header>
         
@@ -33,6 +38,49 @@
                 </button>
             </div>
         </footer>
+    </div>
+    
+    <div id="settings-overlay" class="settings-overlay"></div>
+    <div id="settings-panel" class="settings-panel">
+        <div class="settings-header">
+            <h2>Settings</h2>
+            <button id="close-settings-btn" class="icon-btn">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+        
+        <div class="settings-tabs">
+            <button class="tab-btn active" data-tab="mcp-tab">MCP Settings</button>
+            <button class="tab-btn" data-tab="rag-tab">RAG Settings</button>
+        </div>
+        
+        <div class="settings-content">
+            <!-- MCP Tab -->
+            <div id="mcp-tab" class="tab-pane active">
+                <div class="form-group">
+                    <label for="mcp-command">Command</label>
+                    <input type="text" id="mcp-command" placeholder="e.g., node, python">
+                </div>
+                <div class="form-group">
+                    <label for="mcp-args">Args (comma separated)</label>
+                    <input type="text" id="mcp-args" placeholder="e.g., app.js, --port, 8080">
+                </div>
+                <button id="save-mcp-btn" class="primary-btn">Save MCP Config</button>
+            </div>
+            
+            <!-- RAG Tab -->
+            <div id="rag-tab" class="tab-pane">
+                <div class="form-group">
+                    <label for="rag-endpoint">Endpoint</label>
+                    <input type="text" id="rag-endpoint" placeholder="e.g., http://localhost:19530">
+                </div>
+                <div class="form-group">
+                    <label for="rag-collection">Collection Name</label>
+                    <input type="text" id="rag-collection" placeholder="e.g., my_collection">
+                </div>
+                <button id="save-rag-btn" class="primary-btn">Save RAG Config</button>
+            </div>
+        </div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
