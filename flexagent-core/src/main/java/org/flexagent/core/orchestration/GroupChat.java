@@ -11,6 +11,7 @@ public class GroupChat {
     private final List<AgentNode> agentNodes = new ArrayList<>();
     private final MessageBus messageBus;
     private final List<GroupChatMessage> history = new ArrayList<>();
+    private org.flexagent.core.observation.AgentObservationRegistry observationRegistry = org.flexagent.core.observation.AgentObservationRegistry.NOOP;
     
     private NextSpeakerSelector selector = new RoundRobinSpeakerSelector();
     private boolean isFinished = false;
@@ -18,6 +19,10 @@ public class GroupChat {
 
     public GroupChat(MessageBus messageBus) {
         this.messageBus = messageBus;
+    }
+
+    public void setObservationRegistry(org.flexagent.core.observation.AgentObservationRegistry registry) {
+        this.observationRegistry = registry != null ? registry : org.flexagent.core.observation.AgentObservationRegistry.NOOP;
     }
 
     public void addAgent(AgentProfile agent) {
@@ -58,7 +63,15 @@ public class GroupChat {
             throw new IllegalStateException("No agent nodes in the group chat");
         }
         
-        return selector.selectNext(agentNodes, history);
+        try (org.flexagent.core.observation.AgentSpan span = observationRegistry.startSpan("GroupChat.selectNext")) {
+            AgentNode next = selector.selectNext(agentNodes, history);
+            if (next != null) {
+                span.tag("selectedAgent", next.getName());
+            } else {
+                span.tag("selectedAgent", "none");
+            }
+            return next;
+        }
     }
     
     public void broadcast(AgentMessage message, String sender) {
