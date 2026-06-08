@@ -10,6 +10,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,6 +55,23 @@ public class FlexAgentAutoConfiguration {
         } else {
             return new org.flexagent.core.memory.InMemoryAgentMemory(memProps.getTtl());
         }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "flexagent.openai", name = "api-key")
+    public ChatLanguageModel openAiChatModel(FlexAgentProperties properties) {
+        FlexAgentProperties.OpenAiProperties openAiProps = properties.getOpenai();
+        dev.langchain4j.model.openai.OpenAiChatModel.OpenAiChatModelBuilder builder = 
+                dev.langchain4j.model.openai.OpenAiChatModel.builder()
+                        .apiKey(openAiProps.getApiKey())
+                        .modelName(properties.getModelName());
+                        
+        if (StringUtils.hasText(openAiProps.getBaseUrl())) {
+            builder.baseUrl(openAiProps.getBaseUrl());
+        }
+        
+        return builder.build();
     }
 
     @Bean
@@ -118,6 +137,12 @@ public class FlexAgentAutoConfiguration {
         }
 
         return builder.build();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public org.flexagent.core.FlexAgentClient flexAgentClient(FlexAgentChatModel flexAgentChatModel) {
+        return flexAgentChatModel.getCoreClient();
     }
 
     @Bean

@@ -1,31 +1,30 @@
-from abc import ABC, abstractmethod
-from typing import List
 from flexagent.core.agent_memory import AgentMemory, SystemMessage
 
-class MemoryCompaction(ABC):
-    @abstractmethod
-    def compact(self, memory: AgentMemory) -> None:
-        pass
-
-class SlidingWindow(MemoryCompaction):
-    def __init__(self, max_messages: int = 10):
+class MessageCompactor:
+    def __init__(self, memory: AgentMemory, max_messages: int = 10):
+        self.memory = memory
         self.max_messages = max_messages
-        
-    def compact(self, memory: AgentMemory) -> None:
-        messages = memory.get_messages()
+
+    def compact(self, session_id: str) -> None:
+        messages = self.memory.get_messages(session_id)
         if len(messages) <= self.max_messages:
             return
-            
-        system_msgs = []
-        other_msgs = messages
-        
+
+        has_system = False
         if messages and isinstance(messages[0], SystemMessage):
-            system_msgs.append(messages[0])
-            other_msgs = messages[1:]
+            has_system = True
+
+        to_keep = self.max_messages
+        if has_system:
+            to_keep -= 1
             
-        keep_count = self.max_messages - len(system_msgs)
-        if keep_count < 0:
-            keep_count = 0
-            
-        new_messages = system_msgs + other_msgs[-keep_count:] if keep_count > 0 else system_msgs
-        memory.set_messages(new_messages)
+        recent = messages[-to_keep:] if to_keep > 0 else []
+        
+        new_messages = []
+        if has_system:
+            new_messages.append(messages[0])
+        new_messages.extend(recent)
+        
+        self.memory.clear(session_id)
+        self.memory.add_messages(session_id, new_messages)
+

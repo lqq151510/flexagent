@@ -2,6 +2,23 @@
 
 所有 FlexAgent 的重大更新与版本迭代均记录于此。
 
+## [1.2.0] - 2026-06-08
+
+### 🚀 核心控制反转与无缝集成
+* **FlexAgentClient 门面下沉**：将原本耦合在 LangChain4j 中的 Agent Loop、Tool Call 和 Memory 管理逻辑全面抽离并下沉至 `flexagent-core` 的 `FlexAgentClient` 中，实现核心调度的完全自治。
+* **零侵入生态兼容**：
+  * **Spring Boot Starter**：原生暴露 `FlexAgentClient` Bean 供新业务使用，同时保留原有 `FlexAgentChatModel` 桥接，旧业务零代码修改即可享受新引擎。
+  * **Spring AI**：`SpringAiRuntime` 无缝适配新架构，将内部 FunctionCallback 请求完美转换为标准 `ToolCall` 协议。
+  * **MCP**：`McpToolExecutor` 在新架构下稳定支持跨进程工具调用。
+
+### ⚡ 极速并发优化
+* **解除 Agent Loop 队列阻塞死锁**：修复了 `ReActStrategy` 轮询策略中引发的主线程强制 100ms 盲等机制，引入 `isCompleteResponse` 前置嗅探。
+* **吞吐量跃升**：在 JMH 并发基准压测中，吞吐量从原本的 11 TPS 暴涨 17,000 倍达到 189,000+ TPS，框架层封装开销降至微秒级（~5μs）。
+
+### 🐍 Python SDK 生态对齐
+* **全面平齐 Java 最新协议**：`flexagent-sdk-python` 完全跟进 Java 端的 `AgentClient` 核心设计，包括统一的 ToolCall 执行和 AgentMessage 内存编解码方案，全量自动化测试 100% 通过。
+
+
 ## [1.1.0] - 2026-06-07
 
 ### 🚀 多智能体编排与测评生态

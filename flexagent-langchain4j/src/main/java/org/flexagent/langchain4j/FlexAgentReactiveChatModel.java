@@ -49,7 +49,7 @@ public class FlexAgentReactiveChatModel {
                     if (agentHistory != null && !agentHistory.isEmpty()) {
                         FlexAgentObservationUtils.recordMemoryHit(sessionId, true);
                         for (AgentMessage am : agentHistory) {
-                            chatHistory.add(delegate.toChatMessage(am));
+                            chatHistory.add(MessageConverter.toChatMessage(am));
                         }
                     } else {
                         FlexAgentObservationUtils.recordMemoryHit(sessionId, false);
@@ -63,12 +63,12 @@ public class FlexAgentReactiveChatModel {
                     chatHistory = delegate.withInitialSystemMessages(chatHistory);
 
                     if (delegate.activeRuntime instanceof LangChain4jRuntime lc4jRuntime) {
-                        lc4jRuntime.setHistoryMessages(chatHistory);
+                        lc4jRuntime.setChatMessages(chatHistory);
                         lc4jRuntime.setSessionId(sessionId);
                     }
                 } else {
                     if (delegate.activeRuntime instanceof LangChain4jRuntime lc4jRuntime) {
-                        lc4jRuntime.setHistoryMessages(delegate.withInitialSystemMessages(new ArrayList<>()));
+                        lc4jRuntime.setChatMessages(delegate.withInitialSystemMessages(new ArrayList<>()));
                         lc4jRuntime.setSessionId(sessionId);
                     }
                 }
@@ -136,7 +136,7 @@ public class FlexAgentReactiveChatModel {
                                             List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
                                             List<AgentMessage> updatedAgentMessages = new ArrayList<>();
                                             for (ChatMessage cm : updatedMessages) {
-                                                updatedAgentMessages.add(delegate.toAgentMessage(cm));
+                                                updatedAgentMessages.add(MessageConverter.toAgentMessage(cm, org.flexagent.core.model.ToolCallPolicy.LENIENT));
                                             }
                                             delegate.memory.clear(sessionId);
                                             delegate.memory.addMessages(sessionId, updatedAgentMessages);

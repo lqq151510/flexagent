@@ -202,4 +202,38 @@ public class FlexAgentProperties {
             }
         }
     }
+
+    private final OpenAiProperties openai = new OpenAiProperties();
+
+    public OpenAiProperties getOpenai() {
+        return openai;
+    }
+
+    public static class OpenAiProperties {
+        /**
+         * The OpenAI API key.
+         */
+        private String apiKey;
+
+        /**
+         * The base URL for the OpenAI compatible API.
+         */
+        private String baseUrl;
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+    }
 }

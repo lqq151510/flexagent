@@ -20,4 +20,8 @@ public interface AgentRuntime extends AutoCloseable {
     Set<RuntimeCapability> capabilities();
     ThinkingMode thinkingMode();
     ToolCallPolicy toolCallPolicy();
+
+    default void setHistoryMessages(java.util.List<org.flexagent.core.memory.AgentMessage> messages) {}
+    default java.util.List<org.flexagent.core.memory.AgentMessage> getHistoryMessages() { return java.util.Collections.emptyList(); }
+    default void setSessionId(String sessionId) {}
 }

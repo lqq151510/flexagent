@@ -1,6 +1,6 @@
 package org.flexagent.langchain4j;
 
-import org.flexagent.core.model.Step;
+import org.flexagent.core.FlexAgentClient;
 import org.flexagent.core.model.ToolResult;
 import org.flexagent.core.model.ThinkingMode;
 import org.flexagent.core.model.ToolCallPolicy;
@@ -13,80 +13,73 @@ import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.exception.FlexAgentException;
 import org.flexagent.core.memory.compaction.CompactionStrategy;
 import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
-import org.flexagent.core.runtime.FlexAgentObservationUtils;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import org.flexagent.core.memory.AgentMemory;
 import org.flexagent.core.memory.AgentMessage;
 import org.flexagent.core.memory.AgentSessionContext;
-import org.flexagent.core.model.ToolCall;
 import org.flexagent.core.tool.CustomToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import java.util.Map;
-import java.util.Collections;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final Logger log = LoggerFactory.getLogger(FlexAgentChatModel.class);
 
-    private final String binaryPath;
-    private final String storageDirectory;
-    private final String modelName;
-    private final String thinkingLevel;
-    private final String systemInstruction;
-    private final List<Object> toolObjects;
-    private final Object delegateModel;
-    private final AgentRuntime customRuntime;
-    private final ThinkingMode thinkingMode;
+    private final FlexAgentClient coreClient;
     private final ToolCallPolicy toolCallPolicy;
-    private final CompactionStrategy compactionStrategy;
+    final AgentRuntime activeRuntime;
+    private final List<Object> toolObjects;
     final AgentMemory memory;
     final List<CustomToolExecutor> customToolExecutors;
-
-    // Persistent runtime and tool adapter
-    final AgentRuntime activeRuntime;
     final ToolAdapter toolAdapter;
-    final org.flexagent.core.strategy.AgentStrategy strategy;
     final List<ChatMessage> initialSystemMessages;
 
     private FlexAgentChatModel(Builder builder) {
-        this.binaryPath = builder.binaryPath;
-        this.storageDirectory = builder.storageDirectory;
-        this.modelName = builder.modelName;
-        this.thinkingLevel = builder.thinkingLevel;
-        this.systemInstruction = builder.systemInstruction;
+        this.toolCallPolicy = builder.toolCallPolicy != null ? builder.toolCallPolicy : ToolCallPolicy.LENIENT;
         this.toolObjects = new ArrayList<>(builder.toolObjects);
-        this.delegateModel = builder.delegateModel;
-        this.customRuntime = builder.customRuntime;
-        this.thinkingMode = builder.thinkingMode;
-        this.toolCallPolicy = builder.toolCallPolicy;
-        this.compactionStrategy = builder.compactionStrategy;
         this.memory = builder.memory;
         this.customToolExecutors = new ArrayList<>(builder.customToolExecutors);
-        this.strategy = builder.strategy != null ? builder.strategy : new org.flexagent.core.strategy.ReActStrategy();
-
-        // Initialize persistent runtime and adapter
+        
         try {
-            this.activeRuntime = initRuntime(builder.runtimeType);
             this.toolAdapter = new ToolAdapter(this.toolObjects);
-            this.initialSystemMessages = snapshotInitialSystemMessages();
+            this.activeRuntime = initRuntime(builder);
+            this.initialSystemMessages = snapshotInitialSystemMessages(builder.systemInstruction);
+            
+            List<AgentMessage> initialAgentMessages = new ArrayList<>();
+            for (ChatMessage cm : this.initialSystemMessages) {
+                initialAgentMessages.add(MessageConverter.toAgentMessage(cm, this.toolCallPolicy));
+            }
+
+            this.coreClient = FlexAgentClient.builder()
+                    .activeRuntime(this.activeRuntime)
+                    .strategy(builder.strategy != null ? builder.strategy : new org.flexagent.core.strategy.ReActStrategy())
+                    .memory(builder.memory)
+                    .initialSystemMessages(initialAgentMessages)
+                    .toolExecutor(toolCall -> {
+                        log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
+                        ToolResult toolResult = null;
+                        for (CustomToolExecutor executor : builder.customToolExecutors) {
+                            if (executor.supports(toolCall.name())) {
+                                toolResult = executor.execute(toolCall);
+                                break;
+                            }
+                        }
+                        if (toolResult == null) {
+                            toolResult = toolAdapter.execute(toolCall);
+                        }
+                        return toolResult;
+                    })
+                    .build();
         } catch (FlexAgentException e) {
             throw e;
         } catch (Exception e) {
@@ -101,15 +94,15 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return new Builder();
     }
 
-    private AgentRuntime initRuntime(String selectedRuntimeType) {
-        AgentRuntime runtime = this.customRuntime;
+    private AgentRuntime initRuntime(Builder builder) {
+        AgentRuntime runtime = builder.customRuntime;
         if (runtime == null) {
-            String type = selectedRuntimeType;
+            String type = builder.runtimeType;
             if (type == null || type.isEmpty()) {
-                type = (this.binaryPath != null && !this.binaryPath.isEmpty()) ? RuntimeTypes.LOCAL_HARNESS : RuntimeTypes.LANGCHAIN4J;
+                type = (builder.binaryPath != null && !builder.binaryPath.isEmpty()) ? RuntimeTypes.LOCAL_HARNESS : RuntimeTypes.LANGCHAIN4J;
             }
 
-            if (this.binaryPath == null && this.delegateModel == null && RuntimeTypes.LANGCHAIN4J.equals(type)) {
+            if (builder.binaryPath == null && builder.delegateModel == null && RuntimeTypes.LANGCHAIN4J.equals(type)) {
                 throw new IllegalStateException("delegateModel (for LangChain4j) must be specified when using langchain4j runtime.");
             }
 
@@ -125,294 +118,53 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             if (matchedProviders.isEmpty()) {
                 throw new ProviderNotFoundException(finalType);
             }
-            if (matchedProviders.size() > 1) {
-                throw new ProviderNotFoundException(finalType, matchedProviders.size());
-            }
             
             org.flexagent.core.runtime.AgentRuntimeProvider provider = matchedProviders.get(0);
             log.info("FlexAgent runtime loaded via SPI: {}", finalType);
             
-            AgentRuntimeConfig runtimeConfig = new AgentRuntimeConfig(finalType, this.delegateModel, null);
+            AgentRuntimeConfig runtimeConfig = new AgentRuntimeConfig(finalType, builder.delegateModel, null);
             runtime = provider.create(runtimeConfig);
         }
 
         // Prepare configuration
         AgentConfig config = new AgentConfig();
-        config.setBinaryPath(this.binaryPath);
-        config.setStorageDirectory(this.storageDirectory);
-        config.setModelName(this.modelName);
-        config.setThinkingLevel(this.thinkingLevel);
-        config.setSystemInstruction(this.systemInstruction);
-        config.setThinkingMode(this.thinkingMode != null ? this.thinkingMode : ThinkingMode.NONE);
-        config.setToolCallPolicy(this.toolCallPolicy != null ? this.toolCallPolicy : ToolCallPolicy.LENIENT);
+        config.setBinaryPath(builder.binaryPath);
+        config.setStorageDirectory(builder.storageDirectory);
+        config.setModelName(builder.modelName);
+        config.setThinkingLevel(builder.thinkingLevel);
+        config.setSystemInstruction(builder.systemInstruction);
+        config.setThinkingMode(builder.thinkingMode != null ? builder.thinkingMode : ThinkingMode.NONE);
+        config.setToolCallPolicy(this.toolCallPolicy);
         if (this.toolObjects != null) {
             for (Object tool : this.toolObjects) {
                 config.addToolObject(tool);
+            }
+        }
+        if (this.toolAdapter != null) {
+            for (org.flexagent.core.model.ToolDefinition toolDef : this.toolAdapter.getTools()) {
+                config.addTool(toolDef);
             }
         }
 
         try {
             runtime.initialize(config);
         } catch (IOException e) {
-            throw new RuntimeInitializationException(selectedRuntimeType, "Initialize failed", e);
+            throw new RuntimeInitializationException(builder.runtimeType, "Initialize failed", e);
         }
 
         // Apply compaction strategy if LangChain4jRuntime is used
-        if (runtime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-            if (this.compactionStrategy != null) {
-                lc4jRuntime.setCompactionStrategy(this.compactionStrategy);
+        if (runtime instanceof LangChain4jRuntime lc4jRuntime) {
+            if (builder.compactionStrategy != null) {
+                lc4jRuntime.setCompactionStrategy(builder.compactionStrategy);
             }
         }
 
         return runtime;
     }
 
-    @Override
-    public synchronized Response<AiMessage> generate(List<ChatMessage> messages) {
-        String prompt = "";
-        for (ChatMessage message : messages) {
-            if (message instanceof UserMessage userMsg) {
-                prompt = userMsg.text();
-            }
-        }
-
-        log.info("Generating response for prompt length: {}", prompt.length());
-
-        String sessionId = AgentSessionContext.get();
-        boolean hasMemory = (this.memory != null && sessionId != null);
-
-        if (hasMemory) {
-            List<AgentMessage> agentHistory = this.memory.getMessages(sessionId);
-            List<ChatMessage> chatHistory = new ArrayList<>();
-            if (agentHistory != null && !agentHistory.isEmpty()) {
-                FlexAgentObservationUtils.recordMemoryHit(sessionId, true);
-                for (AgentMessage am : agentHistory) {
-                    chatHistory.add(toChatMessage(am));
-                }
-            } else {
-                FlexAgentObservationUtils.recordMemoryHit(sessionId, false);
-            }
-
-            // Sync initial stateless history to memory if memory is empty
-            if (chatHistory.isEmpty() && messages != null && messages.size() > 1) {
-                List<ChatMessage> initialHistory = new ArrayList<>(messages.subList(0, messages.size() - 1));
-                for (ChatMessage cm : initialHistory) {
-                    this.memory.addMessage(sessionId, toAgentMessage(cm));
-                }
-                chatHistory.addAll(initialHistory);
-            }
-
-            chatHistory = withInitialSystemMessages(chatHistory);
-
-            if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                lc4jRuntime.setHistoryMessages(chatHistory);
-                lc4jRuntime.setSessionId(sessionId);
-            }
-        } else {
-            // Update conversation history dynamically for the persistent LangChain4j runtime
-            if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                if (messages != null && messages.size() > 1) {
-                    lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>(messages.subList(0, messages.size() - 1))));
-                } else {
-                    lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>()));
-                }
-                lc4jRuntime.setSessionId(sessionId);
-            }
-        }
-
-        try {
-            AgentMessage resultMessage = this.strategy.execute(prompt, this.activeRuntime, toolCall -> {
-                log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                ToolResult toolResult = null;
-                for (CustomToolExecutor executor : this.customToolExecutors) {
-                    if (executor.supports(toolCall.name())) {
-                        toolResult = executor.execute(toolCall);
-                        break;
-                    }
-                }
-                if (toolResult == null) {
-                    toolResult = this.toolAdapter.execute(toolCall);
-                }
-                return toolResult;
-            });
-            AiMessage aiMessage = AiMessage.from(resultMessage.text());
-
-            // Save conversation history back to memory
-            if (hasMemory) {
-                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                    List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
-                    List<AgentMessage> updatedAgentMessages = new ArrayList<>();
-                    for (ChatMessage cm : updatedMessages) {
-                        updatedAgentMessages.add(toAgentMessage(cm));
-                    }
-                    this.memory.clear(sessionId);
-                    this.memory.addMessages(sessionId, updatedAgentMessages);
-                } else {
-                    // For non-langchain4j runtime, manually record user prompt and assistant response
-                    this.memory.addMessage(sessionId, AgentMessage.user(prompt));
-                    this.memory.addMessage(sessionId, AgentMessage.assistant(resultMessage.text()));
-                }
-            }
-
-            return Response.from(aiMessage);
-
-        } catch (FlexAgentException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Error executing FlexAgent Agent Runtime", e);
-            throw new FlexAgentException("FlexAgent agent execution failed: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public void close() throws Exception {
-        if (this.activeRuntime != null) {
-            this.activeRuntime.close();
-            log.info("FlexAgentChatModel active runtime successfully closed.");
-        }
-    }
-
-    // Exposed getter for testing/diagnostic purposes
-    public AgentRuntime activeRuntime() {
-        return this.activeRuntime;
-    }
-
-    public List<Object> toolObjects() {
-        return this.toolObjects;
-    }
-
-    public Response<AiMessage> generate(String sessionId, String userMessage) {
-        AgentSessionContext.set(sessionId);
-        try {
-            return generate(List.of(UserMessage.from(userMessage)));
-        } finally {
-            AgentSessionContext.clear();
-        }
-    }
-
-    public Response<AiMessage> generate(String sessionId, List<ChatMessage> messages) {
-        AgentSessionContext.set(sessionId);
-        try {
-            return generate(messages);
-        } finally {
-            AgentSessionContext.clear();
-        }
-    }
-
-    public Flux<String> stream(String sessionId, String userMessage) {
-        AgentSessionContext.set(sessionId);
-        try {
-            return stream(List.of(UserMessage.from(userMessage)));
-        } finally {
-            AgentSessionContext.clear();
-        }
-    }
-
-    public Flux<String> stream(String sessionId, List<ChatMessage> messages) {
-        AgentSessionContext.set(sessionId);
-        try {
-            return stream(messages);
-        } finally {
-            AgentSessionContext.clear();
-        }
-    }
-
-    public Flux<String> stream(List<ChatMessage> messages) {
-        return Flux.create(emitter -> {
-            String prompt = "";
-            for (ChatMessage message : messages) {
-                if (message instanceof UserMessage userMsg) {
-                    prompt = userMsg.text();
-                }
-            }
-
-            log.info("Generating stream for prompt length: {}", prompt.length());
-
-            String sessionId = AgentSessionContext.get();
-            boolean hasMemory = (this.memory != null && sessionId != null);
-
-            if (hasMemory) {
-                List<AgentMessage> agentHistory = this.memory.getMessages(sessionId);
-                List<ChatMessage> chatHistory = new ArrayList<>();
-                if (agentHistory != null && !agentHistory.isEmpty()) {
-                    FlexAgentObservationUtils.recordMemoryHit(sessionId, true);
-                    for (AgentMessage am : agentHistory) {
-                        chatHistory.add(toChatMessage(am));
-                    }
-                } else {
-                    FlexAgentObservationUtils.recordMemoryHit(sessionId, false);
-                }
-
-                if (chatHistory.isEmpty() && messages != null && messages.size() > 1) {
-                    List<ChatMessage> initialHistory = new ArrayList<>(messages.subList(0, messages.size() - 1));
-                    for (ChatMessage cm : initialHistory) {
-                        this.memory.addMessage(sessionId, toAgentMessage(cm));
-                    }
-                    chatHistory.addAll(initialHistory);
-                }
-
-                chatHistory = withInitialSystemMessages(chatHistory);
-
-                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                    lc4jRuntime.setHistoryMessages(chatHistory);
-                    lc4jRuntime.setSessionId(sessionId);
-                }
-            } else {
-                if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                    if (messages != null && messages.size() > 1) {
-                        lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>(messages.subList(0, messages.size() - 1))));
-                    } else {
-                        lc4jRuntime.setHistoryMessages(withInitialSystemMessages(new ArrayList<>()));
-                    }
-                    lc4jRuntime.setSessionId(sessionId);
-                }
-            }
-
-            try {
-                AgentMessage resultMessage = this.strategy.executeStream(prompt, this.activeRuntime, toolCall -> {
-                    log.info("Executing custom Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                    ToolResult toolResult = null;
-                    for (CustomToolExecutor executor : this.customToolExecutors) {
-                        if (executor.supports(toolCall.name())) {
-                            toolResult = executor.execute(toolCall);
-                            break;
-                        }
-                    }
-                    if (toolResult == null) {
-                        toolResult = this.toolAdapter.execute(toolCall);
-                    }
-                    return toolResult;
-                }, token -> {
-                    emitter.next(token);
-                });
-
-                if (hasMemory) {
-                    if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
-                        List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
-                        List<AgentMessage> updatedAgentMessages = new ArrayList<>();
-                        for (ChatMessage cm : updatedMessages) {
-                            updatedAgentMessages.add(toAgentMessage(cm));
-                        }
-                        this.memory.clear(sessionId);
-                        this.memory.addMessages(sessionId, updatedAgentMessages);
-                    } else {
-                        this.memory.addMessage(sessionId, AgentMessage.user(prompt));
-                        this.memory.addMessage(sessionId, AgentMessage.assistant(resultMessage.text()));
-                    }
-                }
-
-                emitter.complete();
-
-            } catch (Exception e) {
-                log.error("Error executing FlexAgent stream", e);
-                emitter.error(new FlexAgentException("FlexAgent stream execution failed: " + e.getMessage(), e));
-            }
-        });
-    }
-
-    private List<ChatMessage> snapshotInitialSystemMessages() {
+    private List<ChatMessage> snapshotInitialSystemMessages(String systemInstruction) {
         List<ChatMessage> snapshot = new ArrayList<>();
-        if (this.activeRuntime instanceof org.flexagent.langchain4j.LangChain4jRuntime lc4jRuntime) {
+        if (this.activeRuntime instanceof LangChain4jRuntime lc4jRuntime) {
             List<ChatMessage> runtimeHistory = lc4jRuntime.getChatMessages();
             if (runtimeHistory != null) {
                 for (ChatMessage message : runtimeHistory) {
@@ -421,8 +173,8 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                     }
                 }
             }
-        } else if (this.systemInstruction != null && !this.systemInstruction.isBlank()) {
-            snapshot.add(SystemMessage.from(this.systemInstruction));
+        } else if (systemInstruction != null && !systemInstruction.isBlank()) {
+            snapshot.add(SystemMessage.from(systemInstruction));
         }
         return List.copyOf(snapshot);
     }
@@ -445,93 +197,86 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         return history;
     }
 
-    ChatMessage toChatMessage(AgentMessage msg) {
-        if (msg == null) {
-            return null;
+    @Override
+    public Response<AiMessage> generate(List<ChatMessage> messages) {
+        List<AgentMessage> agentMessages = new ArrayList<>();
+        for (ChatMessage cm : messages) {
+            agentMessages.add(MessageConverter.toAgentMessage(cm, this.toolCallPolicy));
         }
-        switch (msg.role()) {
-            case "system":
-                return SystemMessage.from(msg.text());
-            case "user":
-                return UserMessage.from(msg.text());
-            case "assistant":
-            case "ai":
-                if (msg.toolCalls() != null && !msg.toolCalls().isEmpty()) {
-                    List<dev.langchain4j.agent.tool.ToolExecutionRequest> requests = new ArrayList<>();
-                    for (ToolCall tc : msg.toolCalls()) {
-                        requests.add(dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
-                                .id(tc.id())
-                                .name(tc.name())
-                                .arguments(tc.argumentsJson())
-                                .build());
-                    }
-                    if (msg.text() != null && !msg.text().isEmpty()) {
-                        return new AiMessage(msg.text(), requests);
-                    } else {
-                        return AiMessage.from(requests);
-                    }
-                }
-                return AiMessage.from(msg.text());
-            case "tool":
-                return ToolExecutionResultMessage.from(msg.toolId(), msg.toolName(), msg.text());
-            default:
-                throw new IllegalArgumentException("Unknown AgentMessage role: " + msg.role());
-        }
-    }
-
-    AgentMessage toAgentMessage(ChatMessage msg) {
-        if (msg == null) {
-            return null;
-        }
-        if (msg instanceof SystemMessage) {
-            return AgentMessage.system(msg.text());
-        } else if (msg instanceof UserMessage) {
-            return AgentMessage.user(msg.text());
-        } else if (msg instanceof AiMessage aiMsg) {
-            if (aiMsg.hasToolExecutionRequests()) {
-                List<ToolCall> toolCalls = new ArrayList<>();
-                for (dev.langchain4j.agent.tool.ToolExecutionRequest req : aiMsg.toolExecutionRequests()) {
-                    try {
-                        toolCalls.add(new ToolCall(
-                                req.id(),
-                                req.name(),
-                                parseJsonToMapStrict(req.arguments()),
-                                req.arguments(),
-                                null
-                        ));
-                    } catch (Exception e) {
-                        if (this.toolCallPolicy == ToolCallPolicy.TEXT_FALLBACK) {
-                            return AgentMessage.assistant("Tool Call Fallback: " + req.id() + " failed to parse json. " + e.getMessage());
-                        } else if (this.toolCallPolicy == ToolCallPolicy.STRICT) {
-                            throw new RuntimeException("Failed to parse tool call arguments under STRICT policy: " + req.arguments(), e);
-                        } else {
-                            // LENIENT
-                            log.warn("LENIENT: Failed to parse tool call JSON", e);
-                            toolCalls.add(new ToolCall(
-                                    req.id(),
-                                    req.name(),
-                                    Collections.emptyMap(),
-                                    req.arguments(),
-                                    null
-                            ));
-                        }
-                    }
-                }
-                return AgentMessage.assistant(aiMsg.text(), toolCalls);
-            }
-            return AgentMessage.assistant(aiMsg.text());
-        } else if (msg instanceof ToolExecutionResultMessage toolMsg) {
-            return AgentMessage.tool(toolMsg.id(), toolMsg.toolName(), toolMsg.text());
+        
+        AgentMessage responseMsg = this.coreClient.generate(agentMessages);
+        ChatMessage chatMsg = MessageConverter.toChatMessage(responseMsg);
+        if (chatMsg instanceof AiMessage ai) {
+            return Response.from(ai);
         } else {
-            throw new IllegalArgumentException("Unknown ChatMessage type: " + msg.getClass().getName());
+            return Response.from(AiMessage.from(chatMsg.text()));
         }
     }
 
-    private Map<String, Object> parseJsonToMapStrict(String json) throws Exception {
-        if (json == null || json.isEmpty()) {
-            return Collections.emptyMap();
+    public Response<AiMessage> generate(String sessionId, String userMessage) {
+        AgentSessionContext.set(sessionId);
+        try {
+            AgentMessage msg = this.coreClient.generate(userMessage);
+            ChatMessage chatMsg = MessageConverter.toChatMessage(msg);
+            if (chatMsg instanceof AiMessage ai) {
+                return Response.from(ai);
+            } else {
+                return Response.from(AiMessage.from(chatMsg.text()));
+            }
+        } finally {
+            AgentSessionContext.clear();
         }
-        return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+    }
+
+    public Response<AiMessage> generate(String sessionId, List<ChatMessage> messages) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return generate(messages);
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    public Flux<String> stream(List<ChatMessage> messages) {
+        List<AgentMessage> agentMessages = new ArrayList<>();
+        for (ChatMessage cm : messages) {
+            agentMessages.add(MessageConverter.toAgentMessage(cm, this.toolCallPolicy));
+        }
+        return this.coreClient.stream(agentMessages);
+    }
+
+    public Flux<String> stream(String sessionId, String userMessage) {
+        return this.coreClient.stream(sessionId, userMessage);
+    }
+
+    public Flux<String> stream(String sessionId, List<ChatMessage> messages) {
+        AgentSessionContext.set(sessionId);
+        try {
+            return stream(messages);
+        } finally {
+            AgentSessionContext.clear();
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (this.coreClient != null) {
+            this.coreClient.close();
+            log.info("FlexAgentChatModel active runtime successfully closed.");
+        }
+    }
+
+    // Exposed getter for testing/diagnostic purposes
+    public AgentRuntime activeRuntime() {
+        return this.activeRuntime;
+    }
+
+    public List<Object> toolObjects() {
+        return this.toolObjects;
+    }
+
+    public FlexAgentClient getCoreClient() {
+        return this.coreClient;
     }
 
     public static class Builder {
@@ -552,7 +297,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         private Integer compactionMessageThreshold;
         private Integer compactionTokenThreshold;
 
-        // v0.2.0 Streamlined API options
         private String runtimeType;
         private Boolean enableThinkingExtraction;
         private org.flexagent.core.strategy.AgentStrategy strategy;
@@ -599,7 +343,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        // Legacy compatibility
         public Builder addToolObject(Object toolObject) {
             if (toolObject != null) {
                 this.toolObjects.add(toolObject);
@@ -607,7 +350,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        // v0.2.0 simplified tools builder
         public Builder tools(Object... tools) {
             if (tools != null) {
                 for (Object tool : tools) {
@@ -626,13 +368,11 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        // Legacy compatibility
         public Builder delegateModel(Object delegateModel) {
             this.delegateModel = delegateModel;
             return this;
         }
 
-        // v0.2.0 simplified model injector
         public Builder model(Object model) {
             this.delegateModel = model;
             return this;
@@ -648,7 +388,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        // v0.2.0 simplified runtime selection
         public Builder runtime(String runtimeType) {
             this.runtimeType = runtimeType;
             return this;
@@ -667,7 +406,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        // v0.2.0 simplified thinking extractor toggle
         public Builder enableThinkingExtraction(boolean enable) {
             this.enableThinkingExtraction = enable;
             return this;
@@ -714,8 +452,6 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         }
 
         public FlexAgentChatModel build() {
-            validate();
-
             if (this.compactionStrategy == null
                     && (this.compactionMaxMessages != null
                     || this.compactionMessageThreshold != null
@@ -731,11 +467,9 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                 );
             }
 
-            // Apply thinking extraction toggle
             if (this.enableThinkingExtraction != null) {
                 this.thinkingMode = this.enableThinkingExtraction ? ThinkingMode.XML_THINK_TAG : ThinkingMode.NONE;
             } else {
-                // Auto-detect reasoning model
                 boolean isReasoning = false;
                 if (this.modelName != null && (this.modelName.contains("reasoner") || this.modelName.contains("r1"))) {
                     isReasoning = true;
@@ -759,20 +493,16 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
 
                 if (isReasoning) {
                     this.thinkingMode = ThinkingMode.XML_THINK_TAG;
-                    log.info("Auto-enabled thinking extraction for detected reasoning model.");
                 }
             }
 
-            return new FlexAgentChatModel(this);
-        }
-
-        private void validate() {
             String selectedRuntime = this.runtimeType;
             if (selectedRuntime == null || selectedRuntime.isBlank()) {
                 selectedRuntime = (this.binaryPath != null && !this.binaryPath.isBlank())
                         ? RuntimeTypes.LOCAL_HARNESS
                         : RuntimeTypes.LANGCHAIN4J;
             }
+            this.runtimeType = selectedRuntime;
 
             if (this.customRuntime == null
                     && RuntimeTypes.LANGCHAIN4J.equals(selectedRuntime)
@@ -791,6 +521,8 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
                         "binary path is required. Fix: call .localHarness(binaryPath, storageDirectory) or .binaryPath(path)."
                 );
             }
+
+            return new FlexAgentChatModel(this);
         }
     }
 }

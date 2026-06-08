@@ -1,5 +1,4 @@
 import pytest
-from flexagent.core.agent_memory import InMemoryAgentMemory
 from flexagent.adapters.llm_runtime import LLMRuntime
 
 def mock_llm(messages, stream=False):
@@ -21,30 +20,27 @@ async def mock_async_llm(messages, stream=False):
         return "<think>async thought</think>\nAsync answer."
 
 def test_llm_runtime_run():
-    memory = InMemoryAgentMemory()
-    runtime = LLMRuntime(memory=memory, llm_callable=mock_llm)
+    runtime = LLMRuntime(llm_callable=mock_llm)
     
     result = runtime.run("Hello")
     assert "content" in result
     assert result["content"] == "The answer."
     assert "some thought" in result["think"]
     
-    messages = memory.get_messages()
+    messages = runtime.get_history_messages()
     assert len(messages) == 2
-    assert messages[-1].content == "<think>some thought</think>\nThe answer."
+    assert messages[-1].text == "<think>some thought</think>\nThe answer."
 
 @pytest.mark.asyncio
 async def test_llm_runtime_run_async():
-    memory = InMemoryAgentMemory()
-    runtime = LLMRuntime(memory=memory, llm_callable=mock_llm, async_llm_callable=mock_async_llm)
+    runtime = LLMRuntime(llm_callable=mock_llm, async_llm_callable=mock_async_llm)
     
     result = await runtime.run_async("Hello")
     assert result["content"] == "Async answer."
     assert "async thought" in result["think"]
 
 def test_llm_runtime_stream():
-    memory = InMemoryAgentMemory()
-    runtime = LLMRuntime(memory=memory, llm_callable=mock_llm)
+    runtime = LLMRuntime(llm_callable=mock_llm)
     
     chunks = list(runtime.stream("Hello"))
     assert len(chunks) == 2
@@ -53,8 +49,7 @@ def test_llm_runtime_stream():
 
 @pytest.mark.asyncio
 async def test_llm_runtime_stream_async():
-    memory = InMemoryAgentMemory()
-    runtime = LLMRuntime(memory=memory, llm_callable=mock_llm, async_llm_callable=mock_async_llm)
+    runtime = LLMRuntime(llm_callable=mock_llm, async_llm_callable=mock_async_llm)
     
     chunks = []
     async for chunk in runtime.stream_async("Hello"):
@@ -62,3 +57,4 @@ async def test_llm_runtime_stream_async():
         
     assert len(chunks) == 2
     assert chunks[-1]["content_so_far"] == "Async answer."
+

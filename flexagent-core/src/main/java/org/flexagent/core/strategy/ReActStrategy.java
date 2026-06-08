@@ -44,24 +44,19 @@ public class ReActStrategy implements AgentStrategy {
         while (true) {
             Step step = null;
             try {
-                step = runtime.pollStep(100, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while polling step", e);
-            }
-            
-            if (step == null) {
                 if (waitFuture.isDone()) {
-                    try {
-                        step = runtime.pollStep(200, TimeUnit.MILLISECONDS);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new IOException("Interrupted while polling step", e);
-                    }
+                    // Trajectory is completed, just drain the queue non-blocking
+                    step = runtime.pollStep(0, TimeUnit.MILLISECONDS);
                     if (step == null) {
                         break;
                     }
+                } else {
+                    // Block and wait for steps while trajectory is active
+                    step = runtime.pollStep(100, TimeUnit.MILLISECONDS);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while polling step", e);
             }
 
             if (step != null) {
@@ -91,6 +86,10 @@ public class ReActStrategy implements AgentStrategy {
                 }
                 if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
                     log.info("[ReAct Thinking] {}", step.thinkingDelta().trim());
+                }
+
+                if (Boolean.TRUE.equals(step.isCompleteResponse())) {
+                    break;
                 }
             }
         }

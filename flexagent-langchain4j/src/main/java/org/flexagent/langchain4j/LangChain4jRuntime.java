@@ -54,11 +54,31 @@ public class LangChain4jRuntime implements AgentRuntime {
         }
     }
 
-    public void setHistoryMessages(List<ChatMessage> messages) {
+    public void setChatMessages(List<ChatMessage> messages) {
         if (messages != null) {
             this.chatMessages.clear();
             this.chatMessages.addAll(messages);
         }
+    }
+
+    @Override
+    public void setHistoryMessages(List<org.flexagent.core.memory.AgentMessage> messages) {
+        if (messages != null) {
+            this.chatMessages.clear();
+            for (org.flexagent.core.memory.AgentMessage msg : messages) {
+                this.chatMessages.add(MessageConverter.toChatMessage(msg));
+            }
+        }
+    }
+
+    @Override
+    public List<org.flexagent.core.memory.AgentMessage> getHistoryMessages() {
+        List<org.flexagent.core.memory.AgentMessage> result = new ArrayList<>();
+        ToolCallPolicy policy = toolCallPolicy();
+        for (ChatMessage msg : this.chatMessages) {
+            result.add(MessageConverter.toAgentMessage(msg, policy));
+        }
+        return result;
     }
 
     public void setSessionId(String sessionId) {
@@ -113,9 +133,14 @@ public class LangChain4jRuntime implements AgentRuntime {
     }
 
     @Override
-    public void send(String prompt) throws IOException {
-        chatMessages.add(UserMessage.from(prompt));
-        
+    public void send(String text) {
+        if (text != null && !text.isBlank()) {
+            this.chatMessages.add(UserMessage.from(text));
+        }
+        triggerAsyncGeneration();
+    }
+
+    private void triggerAsyncGeneration() {
         // Mark trajectory as active
         this.idleFuture = new CompletableFuture<>();
         
