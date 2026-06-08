@@ -13,6 +13,7 @@
     <description>Parent POM for FlexAgent Java Adapter Architecture</description>
 
     <modules>
+        <module>flexagent-bom</module>
         <module>flexagent-core</module>
         <module>flexagent-localharness</module>
         <module>flexagent-langchain4j</module>
@@ -31,20 +32,49 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         
         <protobuf.version>3.25.1</protobuf.version>
-        <jackson.version>2.17.0</jackson.version>
-        <langchain4j.version>0.31.0</langchain4j.version>
+        <gson.version>2.10.1</gson.version>
+        <jackson.version>2.18.0</jackson.version>
+        <okhttp.version>4.12.0</okhttp.version>
+        <langchain4j.version>0.35.0</langchain4j.version>
         <slf4j.version>2.0.12</slf4j.version>
         <junit.version>5.10.2</junit.version>
         <jedis.version>5.1.2</jedis.version>
         <mockito.version>5.11.0</mockito.version>
         <jacoco.version>0.8.12</jacoco.version>
         
-        <reactor.version>3.6.4</reactor.version>
+        <reactor.version>3.7.0</reactor.version>
         <micrometer.version>1.12.4</micrometer.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Spring Framework BOM -->
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>6.1.8</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Spring Boot BOM -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>3.2.5</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- BOM -->
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-bom</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Submodules -->
             <dependency>
                 <groupId>org.flexagent</groupId>
@@ -63,7 +93,27 @@
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-spring-ai</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-mcp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-rag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-web-console</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -84,7 +134,31 @@
                 <version>${protobuf.version}</version>
             </dependency>
 
+            <!-- Gson -->
+            <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>${gson.version}</version>
+            </dependency>
+
+            <!-- OkHttp -->
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp</artifactId>
+                <version>${okhttp.version}</version>
+            </dependency>
+
             <!-- Jackson JSON -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
@@ -99,6 +173,30 @@
                 <groupId>com.fasterxml.jackson.datatype</groupId>
                 <artifactId>jackson-datatype-jsr310</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.module</groupId>
+                <artifactId>jackson-module-parameter-names</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
+            <!-- jtokkit -->
+            <dependency>
+                <groupId>com.knuddels</groupId>
+                <artifactId>jtokkit</artifactId>
+                <version>1.1.0</version>
+            </dependency>
+
+            <!-- Victools JSON Schema Generator -->
+            <dependency>
+                <groupId>com.github.victools</groupId>
+                <artifactId>jsonschema-generator</artifactId>
+                <version>4.35.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.victools</groupId>
+                <artifactId>jsonschema-module-jackson</artifactId>
+                <version>4.35.0</version>
             </dependency>
 
             <!-- LangChain4j -->
@@ -123,11 +221,6 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-                <version>1.5.3</version>
             </dependency>
 
             <!-- Testing -->
@@ -176,6 +269,25 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-dependency-convergence</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <dependencyConvergence/>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>

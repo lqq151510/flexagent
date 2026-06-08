@@ -3,7 +3,7 @@ package org.flexagent.langchain4j;
 import org.flexagent.core.memory.AgentMemory;
 import org.flexagent.core.memory.InMemoryAgentMemory;
 import org.flexagent.core.model.ToolCallPolicy;
-import org.flexagent.langchain4j.compaction.ToolAwareCompactionStrategy;
+import org.flexagent.core.memory.compaction.ToolAwareCompactionStrategy;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.Tool;

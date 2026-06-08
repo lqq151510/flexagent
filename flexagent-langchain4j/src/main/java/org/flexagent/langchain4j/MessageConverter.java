@@ -18,9 +18,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.flexagent.core.util.FlexObjectMapper;
+
 public class MessageConverter {
     private static final Logger log = LoggerFactory.getLogger(MessageConverter.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = FlexObjectMapper.getInstance();
 
     public static ChatMessage toChatMessage(AgentMessage msg) {
         if (msg == null) return null;

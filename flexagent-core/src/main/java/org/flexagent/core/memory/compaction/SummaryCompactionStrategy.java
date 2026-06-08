@@ -1,13 +1,6 @@
-package org.flexagent.langchain4j.compaction;
+package org.flexagent.core.memory.compaction;
 
-import org.flexagent.core.memory.compaction.CompactionStrategy;
-
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
-import dev.langchain4j.data.message.UserMessage;
-
+import org.flexagent.core.memory.AgentMessage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,17 +40,17 @@ public class SummaryCompactionStrategy extends ThresholdCompactionStrategy {
     }
 
     @Override
-    public List<ChatMessage> compact(List<ChatMessage> messages) {
+    public List<AgentMessage> compact(List<AgentMessage> messages) {
         if (messages == null || messages.size() <= maxMessages) {
             return messages != null ? new ArrayList<>(messages) : new ArrayList<>();
         }
 
-        List<ChatMessage> result = new ArrayList<>();
-        List<ChatMessage> systems = new ArrayList<>();
-        List<ChatMessage> tail = new ArrayList<>();
+        List<AgentMessage> result = new ArrayList<>();
+        List<AgentMessage> systems = new ArrayList<>();
+        List<AgentMessage> tail = new ArrayList<>();
 
-        for (ChatMessage msg : messages) {
-            if (msg instanceof SystemMessage) {
+        for (AgentMessage msg : messages) {
+            if ("system".equals(msg.role())) {
                 systems.add(msg);
             }
         }
@@ -65,24 +58,24 @@ public class SummaryCompactionStrategy extends ThresholdCompactionStrategy {
         int tailSlots = Math.max(minTailMessages, maxMessages - systems.size() - 1);
         int startIdx = Math.max(0, messages.size() - tailSlots);
         for (int i = startIdx; i < messages.size(); i++) {
-            ChatMessage msg = messages.get(i);
-            if (!(msg instanceof SystemMessage)) {
+            AgentMessage msg = messages.get(i);
+            if (!"system".equals(msg.role())) {
                 tail.add(msg);
             }
         }
 
         result.addAll(systems);
-        result.add(SystemMessage.from(buildSummary(messages, startIdx)));
+        result.add(AgentMessage.system(buildSummary(messages, startIdx)));
         result.addAll(tail);
         return result;
     }
 
-    private String buildSummary(List<ChatMessage> messages, int startIdx) {
+    private String buildSummary(List<AgentMessage> messages, int startIdx) {
         StringBuilder summary = new StringBuilder("Conversation summary of earlier context: ");
         boolean first = true;
         for (int i = 0; i < startIdx; i++) {
-            ChatMessage msg = messages.get(i);
-            if (msg instanceof SystemMessage) {
+            AgentMessage msg = messages.get(i);
+            if ("system".equals(msg.role())) {
                 continue;
             }
             if (!first) {
@@ -97,20 +90,20 @@ public class SummaryCompactionStrategy extends ThresholdCompactionStrategy {
         return summary.toString();
     }
 
-    private String label(ChatMessage msg) {
-        if (msg instanceof UserMessage) {
+    private String label(AgentMessage msg) {
+        if ("user".equals(msg.role())) {
             return "User";
         }
-        if (msg instanceof AiMessage) {
+        if ("assistant".equals(msg.role())) {
             return "Assistant";
         }
-        if (msg instanceof ToolExecutionResultMessage) {
+        if ("tool".equals(msg.role())) {
             return "ToolResult";
         }
-        return msg.getClass().getSimpleName();
+        return msg.role();
     }
 
-    private String shortText(ChatMessage msg) {
+    private String shortText(AgentMessage msg) {
         String text = msg.text();
         if (text == null) {
             return "";

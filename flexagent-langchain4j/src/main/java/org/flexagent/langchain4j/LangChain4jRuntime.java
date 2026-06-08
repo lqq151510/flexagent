@@ -8,7 +8,8 @@ import org.flexagent.core.runtime.AgentConfig;
 import org.flexagent.core.runtime.AgentRuntime;
 import org.flexagent.core.runtime.XmlThinkTagExtractor;
 import org.flexagent.core.memory.compaction.CompactionStrategy;
-import org.flexagent.langchain4j.compaction.NoopCompactionStrategy;
+import org.flexagent.core.memory.compaction.NoopCompactionStrategy;
+import org.flexagent.core.memory.AgentMessage;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -24,31 +25,59 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class LangChain4jRuntime implements AgentRuntime {
+import org.flexagent.core.util.FlexObjectMapper;
+
+public class LangChain4jRuntime implements org.flexagent.core.runtime.ReactiveAgentRuntime {
     private static final Logger log = LoggerFactory.getLogger(LangChain4jRuntime.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = FlexObjectMapper.getInstance();
 
     private final ChatLanguageModel model;
-    private final List<ChatMessage> chatMessages = new CopyOnWriteArrayList<>();
+    private final List<ChatMessage> chatMessages = Collections.synchronizedList(new ArrayList<>());
     private final BlockingQueue<Step> stepQueue = new LinkedBlockingQueue<>();
+    private volatile reactor.core.publisher.Sinks.Many<Step> stepSink = reactor.core.publisher.Sinks.many().multicast().onBackpressureBuffer();
+
+    private void emitStep(Step step) {
+        try {
+            stepQueue.put(step);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        if (stepSink != null) {
+            stepSink.tryEmitNext(step);
+        }
+    }
+
+    private void completeStepStream() {
+        if (stepSink != null) {
+            stepSink.tryEmitComplete();
+        }
+    }
+
+    @Override
+    public reactor.core.publisher.Flux<Step> generateStream(String prompt) {
+        this.stepSink = reactor.core.publisher.Sinks.many().multicast().onBackpressureBuffer();
+        send(prompt);
+        return this.stepSink.asFlux();
+    }
+
     
     private AgentConfig config;
     private ToolAdapter toolAdapter;
-    private CompactionStrategy<ChatMessage> compactionStrategy = new NoopCompactionStrategy();
+    private CompactionStrategy<AgentMessage> compactionStrategy = new NoopCompactionStrategy();
     private volatile String sessionId = "stateless";
     
     private volatile CompletableFuture<Void> idleFuture = CompletableFuture.completedFuture(null);
     private volatile CompletableFuture<Void> toolResponseLatch = new CompletableFuture<>();
     
     private final Set<String> pendingToolCallIds = ConcurrentHashMap.newKeySet();
-    private final List<ToolExecutionResultMessage> currentTurnToolResults = new CopyOnWriteArrayList<>();
+    private final List<ToolExecutionResultMessage> currentTurnToolResults = Collections.synchronizedList(new ArrayList<>());
     private int stepIndex = 0;
 
     public LangChain4jRuntime(ChatLanguageModel model) {
         this.model = Objects.requireNonNull(model, "model cannot be null");
     }
 
-    public void setCompactionStrategy(CompactionStrategy<ChatMessage> strategy) {
+    public void setCompactionStrategy(CompactionStrategy<AgentMessage> strategy) {
         if (strategy != null) {
             this.compactionStrategy = strategy;
         }
@@ -152,18 +181,27 @@ public class LangChain4jRuntime implements AgentRuntime {
         try {
             boolean keepRunning = true;
             while (keepRunning) {
-                List<ToolSpecification> toolSpecs = toolAdapter.getToolSpecifications();
+                final List<ToolSpecification> toolSpecs = toolAdapter.getToolSpecifications();
                 Response<AiMessage> response;
                 
-                int beforeMessageCount = chatMessages.size();
-                int beforeTokenCount = compactionStrategy.estimateTokenCount(chatMessages);
-                boolean shouldCompact = compactionStrategy.shouldCompact(chatMessages);
-                String reason = compactionStrategy.compactionReason(chatMessages);
-                List<ChatMessage> compacted = shouldCompact
-                        ? compactionStrategy.compact(chatMessages)
-                        : new ArrayList<>(chatMessages);
+                List<AgentMessage> agentHistory = getHistoryMessages();
+                int beforeMessageCount = agentHistory.size();
+                int beforeTokenCount = compactionStrategy.estimateTokenCount(agentHistory);
+                boolean shouldCompact = compactionStrategy.shouldCompact(agentHistory);
+                String reason = compactionStrategy.compactionReason(agentHistory);
+                final List<ChatMessage> compacted;
+                if (shouldCompact) {
+                    List<ChatMessage> temp = new ArrayList<>();
+                    List<AgentMessage> compactedHistory = compactionStrategy.compact(agentHistory);
+                    for (AgentMessage msg : compactedHistory) {
+                        temp.add(MessageConverter.toChatMessage(msg));
+                    }
+                    compacted = temp;
+                } else {
+                    compacted = new ArrayList<>(chatMessages);
+                }
                 int afterMessageCount = compacted.size();
-                int afterTokenCount = compactionStrategy.estimateTokenCount(compacted);
+                int afterTokenCount = shouldCompact ? compactionStrategy.estimateTokenCount(compactionStrategy.compact(agentHistory)) : beforeTokenCount;
 
                 if (shouldCompact) {
                     log.info(
@@ -186,11 +224,7 @@ public class LangChain4jRuntime implements AgentRuntime {
                         dev.langchain4j.model.StreamingResponseHandler<AiMessage> handler = new dev.langchain4j.model.StreamingResponseHandler<>() {
                             @Override
                             public void onNext(String token) {
-                                try {
-                                    stepQueue.put(new Step("trajectory-lc4j:stream", -1, StepType.STREAM_TOKEN, StepSource.MODEL, StepTarget.USER, StepStatus.ACTIVE, token, token, "", "", Collections.emptyList(), null, false, null, null));
-                                } catch (InterruptedException e) {
-                                    Thread.currentThread().interrupt();
-                                }
+                                emitStep(new Step("trajectory-lc4j:stream", -1, StepType.STREAM_TOKEN, StepSource.MODEL, StepTarget.USER, StepStatus.ACTIVE, token, token, "", "", Collections.emptyList(), null, false, null, null));
                             }
 
                             @Override
@@ -292,7 +326,7 @@ public class LangChain4jRuntime implements AgentRuntime {
                                 response.tokenUsage() != null ? response.tokenUsage().totalTokenCount() : 0
                         )
                 );
-                stepQueue.put(responseStep);
+                emitStep(responseStep);
 
                 // 3. Process custom tools execution requests
                 if (aiMessage.hasToolExecutionRequests()) {
@@ -340,7 +374,7 @@ public class LangChain4jRuntime implements AgentRuntime {
                                 null,
                                 null
                         );
-                        stepQueue.put(fallbackStep);
+                        emitStep(fallbackStep);
                         keepRunning = false;
                         continue;
                     }
@@ -382,7 +416,7 @@ public class LangChain4jRuntime implements AgentRuntime {
                             null,
                             null
                     );
-                    stepQueue.put(toolCallStep);
+                    emitStep(toolCallStep);
 
                     // Await external execution of tool calls
                     try {
@@ -406,7 +440,7 @@ public class LangChain4jRuntime implements AgentRuntime {
         } catch (Exception e) {
             log.error("Unexpected error in LangChain4j Agent Loop", e);
             try {
-                stepQueue.put(new Step(
+                emitStep(new Step(
                         "trajectory-lc4j:error",
                         -1,
                         StepType.UNKNOWN,
@@ -420,11 +454,12 @@ public class LangChain4jRuntime implements AgentRuntime {
                         null,
                         null
                 ));
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
+            } catch (Exception ie) {
+                // ignore
             }
         } finally {
             idleFuture.complete(null);
+            completeStepStream();
         }
     }
 

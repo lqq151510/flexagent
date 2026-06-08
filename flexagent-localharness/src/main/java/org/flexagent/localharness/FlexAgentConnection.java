@@ -16,9 +16,11 @@ import java.net.http.WebSocket;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
+import org.flexagent.core.util.FlexObjectMapper;
+
 public class FlexAgentConnection implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(FlexAgentConnection.class);
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     private final HarnessProcessManager processManager;
     private final BlockingQueue<Step> stepQueue = new LinkedBlockingQueue<>();

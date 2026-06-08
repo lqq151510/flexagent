@@ -3,7 +3,7 @@ package org.flexagent.examples;
 import org.flexagent.core.model.ToolCallPolicy;
 import org.flexagent.core.runtime.RuntimeTypes;
 import org.flexagent.langchain4j.FlexAgentChatModel;
-import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
+import org.flexagent.core.memory.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.openai.OpenAiChatModel;

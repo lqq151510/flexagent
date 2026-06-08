@@ -7,7 +7,7 @@ import reactor.core.publisher.Flux;
  * A reactive extension of the AgentRuntime that allows streaming the execution steps
  * non-blockingly using Project Reactor.
  */
-public interface ReactiveAgentRuntime extends AgentRuntime {
+public interface ReactiveAgentRuntime extends AgentRuntime, AgentCommandChannel {
     
     /**
      * Non-blockingly sends a prompt and streams back the execution steps.

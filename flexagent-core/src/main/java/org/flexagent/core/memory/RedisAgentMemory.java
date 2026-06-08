@@ -1,6 +1,7 @@
 package org.flexagent.core.memory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.flexagent.core.util.FlexObjectMapper;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import java.time.Duration;
@@ -11,7 +12,7 @@ public class RedisAgentMemory implements AgentMemory {
     private final JedisPool jedisPool;
     private final Duration ttl;
     private final String keyPrefix;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = FlexObjectMapper.getInstance();
 
     public RedisAgentMemory(JedisPool jedisPool) {
         this(jedisPool, null, "flexagent:memory:session:");

@@ -3,6 +3,7 @@ package org.flexagent.core.tool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.flexagent.core.util.FlexObjectMapper;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -11,7 +12,7 @@ import java.util.Collection;
 import java.util.List;
 
 public class ToolSchemaGenerator {
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     public static String generateSchema(Method method) {
         try {

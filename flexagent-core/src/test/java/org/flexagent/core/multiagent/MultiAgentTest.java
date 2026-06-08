@@ -77,4 +77,31 @@ public class MultiAgentTest {
         // Wait, the mock strategy always returns the same string.
         assertEquals(llmPlanOutput, result.text());
     }
+
+    @Test
+    public void testGroupChatAndMessageBus() {
+        org.flexagent.core.orchestration.MessageBus messageBus = new org.flexagent.core.orchestration.InMemoryMessageBus();
+        java.util.List<org.flexagent.core.orchestration.GroupChatMessage> received = new java.util.ArrayList<>();
+        messageBus.subscribe(received::add);
+
+        org.flexagent.core.orchestration.GroupChat groupChat = new org.flexagent.core.orchestration.GroupChat(messageBus);
+        groupChat.setRoutingStrategy(org.flexagent.core.orchestration.GroupChat.RoutingStrategy.ROUND_ROBIN);
+
+        AgentNode nodeA = new MockAgentNode("AgentA", "Desc A", "Reply A");
+        AgentNode nodeB = new MockAgentNode("AgentB", "Desc B", "Reply B");
+
+        groupChat.addAgentNode(nodeA);
+        groupChat.addAgentNode(nodeB);
+
+        // Verify round robin turn routing
+        assertEquals("AgentA", groupChat.nextAgentNode().getName());
+        assertEquals("AgentB", groupChat.nextAgentNode().getName());
+        assertEquals("AgentA", groupChat.nextAgentNode().getName());
+
+        // Verify message broadcast
+        groupChat.broadcast("Hello World", "AgentA");
+        assertEquals(1, received.size());
+        assertEquals("AgentA", received.get(0).sender());
+        assertEquals("Hello World", received.get(0).text());
+    }
 }

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.flexagent</groupId>
+    <artifactId>flexagent-bom</artifactId>
+    <version>1.2.0</version>
+    <packaging>pom</packaging>
+
+    <name>FlexAgent BOM</name>
+    <description>Bill of Materials (BOM) to manage versions of FlexAgent submodules</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-core</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-localharness</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-langchain4j</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-spring-ai</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-mcp</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-rag</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-spring-boot-starter</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-web-console</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flexagent</groupId>
+                <artifactId>flexagent-benchmark</artifactId>
+                <version>1.2.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

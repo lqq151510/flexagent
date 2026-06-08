@@ -12,13 +12,15 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.flexagent.core.util.FlexObjectMapper;
+
 /**
  * A native, lightweight Model Context Protocol (MCP) Client.
  * Communicates with MCP Servers using a transport mechanism (e.g. stdio or SSE).
  */
 public class McpClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(McpClient.class);
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     private final McpTransport transport;
     private final Map<Long, CompletableFuture<String>> pendingRequests = new ConcurrentHashMap<>();

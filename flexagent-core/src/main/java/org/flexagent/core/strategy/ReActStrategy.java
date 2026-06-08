@@ -31,69 +31,57 @@ public class ReActStrategy implements AgentStrategy {
 
     @Override
     public AgentMessage executeStream(String prompt, AgentRuntime runtime, Function<org.flexagent.core.model.ToolCall, org.flexagent.core.model.ToolResult> toolExecutor, java.util.function.Consumer<String> tokenHandler) throws IOException {
-        runtime.send(prompt);
-
-        // Wait for trajectory to complete in virtual thread
-        CompletableFuture<Void> waitFuture = CompletableFuture.runAsync(
-                runtime::waitForIdle,
-                Executors.newVirtualThreadPerTaskExecutor()
-        );
+        if (!(runtime instanceof org.flexagent.core.runtime.ReactiveAgentRuntime)) {
+            throw new IllegalArgumentException("Runtime must be an instance of ReactiveAgentRuntime to support reactive execution");
+        }
+        org.flexagent.core.runtime.ReactiveAgentRuntime reactiveRuntime = (org.flexagent.core.runtime.ReactiveAgentRuntime) runtime;
 
         StringBuilder contentBuilder = new StringBuilder();
 
-        while (true) {
-            Step step = null;
-            try {
-                if (waitFuture.isDone()) {
-                    // Trajectory is completed, just drain the queue non-blocking
-                    step = runtime.pollStep(0, TimeUnit.MILLISECONDS);
-                    if (step == null) {
-                        break;
-                    }
-                } else {
-                    // Block and wait for steps while trajectory is active
-                    step = runtime.pollStep(100, TimeUnit.MILLISECONDS);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while polling step", e);
+        try {
+            reactiveRuntime.generateStream(prompt)
+                    .doOnNext(step -> {
+                        if (step.status() == StepStatus.ERROR) {
+                            throw new RuntimeException(new IOException("Runtime execution error: " + step.error()));
+                        }
+
+                        if (step.type() == StepType.STREAM_TOKEN) {
+                            if (tokenHandler != null && step.content() != null) {
+                                tokenHandler.accept(step.content());
+                            }
+                            return;
+                        }
+
+                        // Check for tool call requests from the model
+                        if (step.type() == StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
+                            for (ToolCall toolCall : step.toolCalls()) {
+                                log.info("[ReAct] Executing Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
+                                ToolResult toolResult = toolExecutor.apply(toolCall);
+                                log.info("[ReAct] Tool Result: {}", toolResult);
+                                try {
+                                    reactiveRuntime.sendToolResult(toolResult);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+                        }
+
+                        if (step.contentDelta() != null && !step.contentDelta().isEmpty()) {
+                            contentBuilder.append(step.contentDelta());
+                        }
+                        if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
+                            log.info("[ReAct Thinking] {}", step.thinkingDelta().trim());
+                        }
+                    })
+                    .blockLast();
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof IOException) {
+                throw (IOException) e.getCause();
             }
-
-            if (step != null) {
-                if (step.status() == StepStatus.ERROR) {
-                    throw new IOException("Runtime execution error: " + step.error());
-                }
-                
-                if (step.type() == StepType.STREAM_TOKEN) {
-                    if (tokenHandler != null && step.content() != null) {
-                        tokenHandler.accept(step.content());
-                    }
-                    continue;
-                }
-
-                // Check for tool call requests from the model
-                if (step.type() == StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
-                    for (ToolCall toolCall : step.toolCalls()) {
-                        log.info("[ReAct] Executing Tool: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                        ToolResult toolResult = toolExecutor.apply(toolCall);
-                        log.info("[ReAct] Tool Result: {}", toolResult);
-                        runtime.sendToolResult(toolResult);
-                    }
-                }
-
-                if (step.contentDelta() != null && !step.contentDelta().isEmpty()) {
-                    contentBuilder.append(step.contentDelta());
-                }
-                if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
-                    log.info("[ReAct Thinking] {}", step.thinkingDelta().trim());
-                }
-
-                if (Boolean.TRUE.equals(step.isCompleteResponse())) {
-                    break;
-                }
-            }
+            throw new IOException("Error during reactive step execution", e);
         }
 
         return AgentMessage.assistant(contentBuilder.toString());
     }
 }
+

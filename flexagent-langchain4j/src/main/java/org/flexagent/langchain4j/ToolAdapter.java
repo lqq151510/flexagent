@@ -12,9 +12,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
 
+import org.flexagent.core.util.FlexObjectMapper;
+
 public class ToolAdapter {
     private static final Logger log = LoggerFactory.getLogger(ToolAdapter.class);
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     private final List<Object> toolObjects = new ArrayList<>();
     private final Map<String, ToolMethodInfo> registry = new HashMap<>();

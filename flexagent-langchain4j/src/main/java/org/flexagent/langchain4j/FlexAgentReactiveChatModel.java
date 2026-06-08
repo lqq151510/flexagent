@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.flexagent.core.runtime.ReactiveAgentRuntime;
+import java.io.IOException;
 
 /**
  * A reactive wrapper for FlexAgentChatModel, providing non-blocking asynchronous APIs
@@ -73,91 +75,75 @@ public class FlexAgentReactiveChatModel {
                     }
                 }
 
-                // Send the prompt asynchronously
-                delegate.activeRuntime.send(prompt);
+                ReactiveAgentRuntime reactiveRuntime = (ReactiveAgentRuntime) delegate.activeRuntime;
+                Flux<Step> steps = reactiveRuntime.generateStream(prompt);
 
-                AtomicBoolean keepPolling = new AtomicBoolean(true);
                 StringBuilder contentBuilder = new StringBuilder();
 
-                // Poll steps asynchronously using boundedElastic scheduler
-                sink.onCancel(() -> keepPolling.set(false));
-                sink.onDispose(() -> keepPolling.set(false));
+                reactor.core.Disposable disposable = steps.subscribe(
+                    step -> {
+                        if (step.status() == org.flexagent.core.model.StepStatus.ERROR) {
+                            sink.error(new FlexAgentException("Runtime execution error: " + step.error()));
+                            return;
+                        }
 
-                Runnable pollingTask = new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            while (keepPolling.get()) {
-                                Step step = delegate.activeRuntime.pollStep(100, TimeUnit.MILLISECONDS);
-                                if (step == null) {
-                                    // If no step, yield to not hog thread, though we are blocking briefly in pollStep
-                                    continue;
-                                }
-
-                                if (step.status() == org.flexagent.core.model.StepStatus.ERROR) {
-                                    sink.error(new FlexAgentException("Runtime execution error: " + step.error()));
-                                    return;
-                                }
-
-                                // Handle tool calls
-                                if (step.type() == org.flexagent.core.model.StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
-                                    for (ToolCall toolCall : step.toolCalls()) {
-                                        log.info("Executing custom Tool via Reactive: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
-                                        ToolResult toolResult = null;
-                                        for (CustomToolExecutor executor : delegate.customToolExecutors) {
-                                            if (executor.supports(toolCall.name())) {
-                                                toolResult = executor.execute(toolCall);
-                                                break;
-                                            }
-                                        }
-                                        if (toolResult == null) {
-                                            toolResult = delegate.toolAdapter.execute(toolCall);
-                                        }
-                                        log.info("Tool Result: {}", toolResult);
-                                        delegate.activeRuntime.sendToolResult(toolResult);
+                        // Handle tool calls
+                        if (step.type() == org.flexagent.core.model.StepType.TOOL_CALL && !step.toolCalls().isEmpty()) {
+                            for (ToolCall toolCall : step.toolCalls()) {
+                                log.info("Executing custom Tool via Reactive: {} (args: {})", toolCall.name(), toolCall.argumentsJson());
+                                ToolResult toolResult = null;
+                                for (CustomToolExecutor executor : delegate.customToolExecutors) {
+                                    if (executor.supports(toolCall.name())) {
+                                        toolResult = executor.execute(toolCall);
+                                        break;
                                     }
                                 }
-
-                                // Emit deltas to sink
-                                if (step.contentDelta() != null && !step.contentDelta().isEmpty()) {
-                                    contentBuilder.append(step.contentDelta());
-                                    sink.next(AgentMessage.assistant(step.contentDelta()));
+                                if (toolResult == null) {
+                                    toolResult = delegate.toolAdapter.execute(toolCall);
                                 }
-                                if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
-                                    // Optionally emit thinking as part of standard stream, or skip.
-                                    // Here we just log, or could emit special AgentMessage.
-                                    log.info("[Thinking] {}", step.thinkingDelta().trim());
-                                }
-
-                                if (Boolean.TRUE.equals(step.isCompleteResponse()) && step.type() == org.flexagent.core.model.StepType.TEXT_RESPONSE) {
-                                    // Writeback to memory
-                                    if (hasMemory) {
-                                        if (delegate.activeRuntime instanceof LangChain4jRuntime lc4jRuntime) {
-                                            List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
-                                            List<AgentMessage> updatedAgentMessages = new ArrayList<>();
-                                            for (ChatMessage cm : updatedMessages) {
-                                                updatedAgentMessages.add(MessageConverter.toAgentMessage(cm, org.flexagent.core.model.ToolCallPolicy.LENIENT));
-                                            }
-                                            delegate.memory.clear(sessionId);
-                                            delegate.memory.addMessages(sessionId, updatedAgentMessages);
-                                        } else {
-                                            delegate.memory.addMessage(sessionId, AgentMessage.user(prompt));
-                                            delegate.memory.addMessage(sessionId, AgentMessage.assistant(contentBuilder.toString()));
-                                        }
-                                    }
-                                    sink.complete();
-                                    return;
+                                log.info("Tool Result: {}", toolResult);
+                                try {
+                                    reactiveRuntime.sendToolResult(toolResult);
+                                } catch (IOException e) {
+                                    sink.error(new FlexAgentException("Failed to send tool result", e));
                                 }
                             }
-                        } catch (Exception e) {
-                            sink.error(new FlexAgentException("FlexAgent reactive agent execution failed", e));
-                        } finally {
-                            AgentSessionContext.clear();
                         }
-                    }
-                };
 
-                Schedulers.boundedElastic().schedule(pollingTask);
+                        // Emit deltas to sink
+                        if (step.contentDelta() != null && !step.contentDelta().isEmpty()) {
+                            contentBuilder.append(step.contentDelta());
+                            sink.next(AgentMessage.assistant(step.contentDelta()));
+                        }
+                        if (step.thinkingDelta() != null && !step.thinkingDelta().isEmpty()) {
+                            log.info("[Thinking] {}", step.thinkingDelta().trim());
+                        }
+
+                        if (Boolean.TRUE.equals(step.isCompleteResponse()) && step.type() == org.flexagent.core.model.StepType.TEXT_RESPONSE) {
+                            // Writeback to memory
+                            if (hasMemory) {
+                                if (reactiveRuntime instanceof LangChain4jRuntime lc4jRuntime) {
+                                    List<ChatMessage> updatedMessages = lc4jRuntime.getChatMessages();
+                                    List<AgentMessage> updatedAgentMessages = new ArrayList<>();
+                                    for (ChatMessage cm : updatedMessages) {
+                                        updatedAgentMessages.add(MessageConverter.toAgentMessage(cm, org.flexagent.core.model.ToolCallPolicy.LENIENT));
+                                    }
+                                    delegate.memory.clear(sessionId);
+                                    delegate.memory.addMessages(sessionId, updatedAgentMessages);
+                                } else {
+                                    delegate.memory.addMessage(sessionId, AgentMessage.user(prompt));
+                                    delegate.memory.addMessage(sessionId, AgentMessage.assistant(contentBuilder.toString()));
+                                }
+                            }
+                            sink.complete();
+                        }
+                    },
+                    sink::error,
+                    sink::complete
+                );
+
+                sink.onCancel(disposable::dispose);
+                sink.onDispose(disposable::dispose);
 
             } catch (Exception e) {
                 sink.error(e);

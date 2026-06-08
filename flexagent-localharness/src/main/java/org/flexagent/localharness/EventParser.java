@@ -12,9 +12,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.flexagent.core.util.FlexObjectMapper;
+
 public class EventParser {
     private static final Logger log = LoggerFactory.getLogger(EventParser.class);
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     public static Step parseStep(StepUpdate su, org.flexagent.localharness.proto.UsageMetadata pbUsage) {
         UsageMetadata usage = pbUsage != null ? parseUsageMetadata(pbUsage) : null;

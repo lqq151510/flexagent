@@ -12,7 +12,7 @@ import org.flexagent.core.exception.ProviderNotFoundException;
 import org.flexagent.core.exception.RuntimeInitializationException;
 import org.flexagent.core.exception.FlexAgentException;
 import org.flexagent.core.memory.compaction.CompactionStrategy;
-import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
+import org.flexagent.core.memory.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -290,7 +290,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
         private AgentRuntime customRuntime;
         private ThinkingMode thinkingMode = ThinkingMode.NONE;
         private ToolCallPolicy toolCallPolicy = ToolCallPolicy.LENIENT;
-        private CompactionStrategy<ChatMessage> compactionStrategy;
+        private CompactionStrategy<AgentMessage> compactionStrategy;
         private AgentMemory memory;
         private Integer compactionMaxMessages;
         private final List<CustomToolExecutor> customToolExecutors = new ArrayList<>();
@@ -431,7 +431,7 @@ public class FlexAgentChatModel implements ChatLanguageModel, AutoCloseable {
             return this;
         }
 
-        public Builder compactionStrategy(CompactionStrategy<ChatMessage> compactionStrategy) {
+        public Builder compactionStrategy(CompactionStrategy<AgentMessage> compactionStrategy) {
             this.compactionStrategy = compactionStrategy;
             return this;
         }

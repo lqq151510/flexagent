@@ -26,13 +26,45 @@ import java.util.concurrent.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 
-public class SpringAiRuntime implements AgentRuntime {
+import org.flexagent.core.util.FlexObjectMapper;
+
+public class SpringAiRuntime implements org.flexagent.core.runtime.ReactiveAgentRuntime {
     private static final Logger log = LoggerFactory.getLogger(SpringAiRuntime.class);
 
     private final ChatModel chatModel;
-    private final List<Message> chatMessages = new CopyOnWriteArrayList<>();
+    private final List<Message> chatMessages = Collections.synchronizedList(new ArrayList<>());
     private final BlockingQueue<Step> stepQueue = new LinkedBlockingQueue<>();
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private volatile reactor.core.publisher.Sinks.Many<Step> stepSink = reactor.core.publisher.Sinks.many().multicast().onBackpressureBuffer();
+
+    private void emitStep(Step step) {
+        try {
+            stepQueue.put(step);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        if (stepSink != null) {
+            stepSink.tryEmitNext(step);
+        }
+    }
+
+    private void completeStepStream() {
+        if (stepSink != null) {
+            stepSink.tryEmitComplete();
+        }
+    }
+
+    @Override
+    public reactor.core.publisher.Flux<Step> generateStream(String prompt) {
+        this.stepSink = reactor.core.publisher.Sinks.many().multicast().onBackpressureBuffer();
+        try {
+            send(prompt);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return this.stepSink.asFlux();
+    }
+
+    private static final ObjectMapper mapper = FlexObjectMapper.getInstance();
 
     private AgentConfig config;
     private CompactionStrategy<Message> compactionStrategy;
@@ -136,9 +168,9 @@ public class SpringAiRuntime implements AgentRuntime {
                                         content, content, "", "",
                                         Collections.emptyList(), null, false, null, null
                                 );
-                                stepQueue.put(tokenStep);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
+                                emitStep(tokenStep);
+                            } catch (Exception e) {
+                                // ignore
                             }
                         }
                         
@@ -193,20 +225,14 @@ public class SpringAiRuntime implements AgentRuntime {
                             text, text, thinking, thinking,
                             Collections.emptyList(), null, true, null, null
                     );
-                    try {
-                        stepQueue.put(responseStep);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                    emitStep(responseStep);
                     idleFuture.complete(null);
+                    completeStepStream();
                 }).doOnError(e -> {
                     log.error("Spring AI loop error (streaming)", e);
-                    try {
-                        stepQueue.put(new Step("error", -1, StepType.UNKNOWN, StepSource.MODEL, StepTarget.USER, StepStatus.ERROR, "", "", "", "", Collections.emptyList(), e.getMessage(), true, null, null));
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
+                    emitStep(new Step("error", -1, StepType.UNKNOWN, StepSource.MODEL, StepTarget.USER, StepStatus.ERROR, "", "", "", "", Collections.emptyList(), e.getMessage(), true, null, null));
                     idleFuture.complete(null);
+                    completeStepStream();
                 }).subscribe();
             } else {
                 ChatResponse response = chatModel.call(prompt);
@@ -262,19 +288,14 @@ public class SpringAiRuntime implements AgentRuntime {
                         text, text, thinking, thinking,
                         Collections.emptyList(), null, true, null, null
                 );
-                stepQueue.put(responseStep);
             }
-
         } catch (Exception e) {
             log.error("Spring AI loop error", e);
-            try {
-                stepQueue.put(new Step("error", -1, StepType.UNKNOWN, StepSource.MODEL, StepTarget.USER, StepStatus.ERROR, "", "", "", "", Collections.emptyList(), e.getMessage(), true, null, null));
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
+            emitStep(new Step("error", -1, StepType.UNKNOWN, StepSource.MODEL, StepTarget.USER, StepStatus.ERROR, "", "", "", "", Collections.emptyList(), e.getMessage(), true, null, null));
         } finally {
             if (!isStreaming) {
                 idleFuture.complete(null);
+                completeStepStream();
             }
         }
     }
@@ -358,7 +379,7 @@ public class SpringAiRuntime implements AgentRuntime {
                         "", "", "", "",
                         List.of(toolCall), null, false, null, null
                 );
-                stepQueue.put(toolCallStep);
+                emitStep(toolCallStep);
 
                 // Block until sendToolResult completes the latch
                 return toolResponseLatch.get();

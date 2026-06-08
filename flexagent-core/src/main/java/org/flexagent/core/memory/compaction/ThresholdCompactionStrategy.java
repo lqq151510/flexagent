@@ -1,15 +1,12 @@
-package org.flexagent.langchain4j.compaction;
+package org.flexagent.core.memory.compaction;
 
-import org.flexagent.core.memory.compaction.CompactionStrategy;
-
-import dev.langchain4j.data.message.ChatMessage;
-
+import org.flexagent.core.memory.AgentMessage;
 import java.util.List;
 
 /**
  * Base strategy with configurable message/token thresholds.
  */
-public abstract class ThresholdCompactionStrategy implements CompactionStrategy<ChatMessage> {
+public abstract class ThresholdCompactionStrategy implements CompactionStrategy<AgentMessage> {
     private final Integer messageThreshold;
     private final Integer tokenThreshold;
 
@@ -28,7 +25,7 @@ public abstract class ThresholdCompactionStrategy implements CompactionStrategy<
     }
 
     @Override
-    public boolean shouldCompact(List<ChatMessage> messages) {
+    public boolean shouldCompact(List<AgentMessage> messages) {
         if (messages == null || messages.isEmpty()) {
             return false;
         }
@@ -40,7 +37,7 @@ public abstract class ThresholdCompactionStrategy implements CompactionStrategy<
     }
 
     @Override
-    public String compactionReason(List<ChatMessage> messages) {
+    public String compactionReason(List<AgentMessage> messages) {
         if (messages == null || messages.isEmpty()) {
             return "empty-context";
         }
@@ -69,15 +66,11 @@ public abstract class ThresholdCompactionStrategy implements CompactionStrategy<
     }
 
     @Override
-    public int estimateTokenCount(List<ChatMessage> messages) {
+    public int estimateTokenCount(List<AgentMessage> messages) {
         if (messages == null) return 0;
         int count = 0;
-        for (ChatMessage message : messages) {
-            String text = "";
-            if (message instanceof dev.langchain4j.data.message.UserMessage um) text = um.text();
-            else if (message instanceof dev.langchain4j.data.message.AiMessage am) text = am.text();
-            else if (message instanceof dev.langchain4j.data.message.SystemMessage sm) text = sm.text();
-            else if (message instanceof dev.langchain4j.data.message.ToolExecutionResultMessage tm) text = tm.text();
+        for (AgentMessage message : messages) {
+            String text = message.text();
             if (text == null) text = "";
             count += Math.max(1, (int) Math.ceil(text.length() / 4.0));
         }

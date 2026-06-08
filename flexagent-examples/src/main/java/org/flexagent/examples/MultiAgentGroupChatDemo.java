@@ -1,7 +1,6 @@
 package org.flexagent.examples;
 
 import org.flexagent.core.orchestration.AgentProfile;
-import org.flexagent.core.orchestration.Event;
 import org.flexagent.core.orchestration.GroupChat;
 import org.flexagent.core.orchestration.InMemoryMessageBus;
 import org.flexagent.core.orchestration.MessageBus;
@@ -16,8 +15,8 @@ public class MultiAgentGroupChatDemo {
         MessageBus messageBus = new InMemoryMessageBus();
         
         // Subscribe to group messages
-        messageBus.subscribe("group_message", event -> {
-            System.out.println("[" + event.source() + "]: " + event.payload());
+        messageBus.subscribe(message -> {
+            System.out.println("[" + message.sender() + "]: " + message.text());
         });
 
         GroupChat groupChat = new GroupChat(messageBus);

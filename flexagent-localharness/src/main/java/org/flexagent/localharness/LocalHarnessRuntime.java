@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-public class LocalHarnessRuntime implements AgentRuntime {
+public class LocalHarnessRuntime implements org.flexagent.core.runtime.ReactiveAgentRuntime {
     private static final Logger log = LoggerFactory.getLogger(LocalHarnessRuntime.class);
 
     private HarnessProcessManager processManager;
@@ -149,5 +149,51 @@ public class LocalHarnessRuntime implements AgentRuntime {
         if (connection != null) {
             connection.close();
         }
+    }
+
+    @Override
+    public reactor.core.publisher.Flux<Step> generateStream(String prompt) {
+        return reactor.core.publisher.Flux.create(sink -> {
+            try {
+                send(prompt);
+                Thread.ofVirtual().name("localharness-flux-emitter").start(() -> {
+                    try {
+                        while (!sink.isCancelled()) {
+                            Step step = pollStep(100, TimeUnit.MILLISECONDS);
+                            if (step != null) {
+                                sink.next(step);
+                                if (step.status() == org.flexagent.core.model.StepStatus.DONE 
+                                    || step.status() == org.flexagent.core.model.StepStatus.ERROR) {
+                                    sink.complete();
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        sink.complete();
+                    } catch (Exception e) {
+                        sink.error(e);
+                    }
+                });
+            } catch (Exception e) {
+                sink.error(e);
+            }
+        }, reactor.core.publisher.FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    @Override
+    public java.util.List<org.flexagent.core.memory.AgentMessage> getHistoryMessages() {
+        return java.util.Collections.emptyList();
+    }
+
+    @Override
+    public void setHistoryMessages(java.util.List<org.flexagent.core.memory.AgentMessage> messages) {
+        // No-op for local harness
+    }
+
+    @Override
+    public void setSessionId(String sessionId) {
+        // No-op for local harness
     }
 }

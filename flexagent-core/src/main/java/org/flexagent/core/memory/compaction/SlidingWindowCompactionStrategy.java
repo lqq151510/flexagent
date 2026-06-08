@@ -1,9 +1,6 @@
-package org.flexagent.langchain4j.compaction;
+package org.flexagent.core.memory.compaction;
 
-import org.flexagent.core.memory.compaction.CompactionStrategy;
-
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
+import org.flexagent.core.memory.AgentMessage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,17 +20,17 @@ public class SlidingWindowCompactionStrategy extends ThresholdCompactionStrategy
     }
 
     @Override
-    public List<ChatMessage> compact(List<ChatMessage> messages) {
+    public List<AgentMessage> compact(List<AgentMessage> messages) {
         if (messages == null || messages.size() <= maxMessages) {
             return messages != null ? new ArrayList<>(messages) : new ArrayList<>();
         }
 
-        List<ChatMessage> result = new ArrayList<>();
-        List<ChatMessage> systems = new ArrayList<>();
-        List<ChatMessage> others = new ArrayList<>();
+        List<AgentMessage> result = new ArrayList<>();
+        List<AgentMessage> systems = new ArrayList<>();
+        List<AgentMessage> others = new ArrayList<>();
 
-        for (ChatMessage msg : messages) {
-            if (msg instanceof SystemMessage) {
+        for (AgentMessage msg : messages) {
+            if ("system".equals(msg.role())) {
                 systems.add(msg);
             } else {
                 others.add(msg);

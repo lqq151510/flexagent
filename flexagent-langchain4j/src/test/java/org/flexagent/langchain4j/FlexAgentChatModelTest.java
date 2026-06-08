@@ -2,7 +2,7 @@ package org.flexagent.langchain4j;
 
 import org.flexagent.core.model.ToolCallPolicy;
 import org.flexagent.core.memory.InMemoryAgentMemory;
-import org.flexagent.langchain4j.compaction.SlidingWindowCompactionStrategy;
+import org.flexagent.core.memory.compaction.SlidingWindowCompactionStrategy;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolSpecification;
