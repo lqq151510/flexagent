@@ -20,7 +20,7 @@ public class MultiAgentGroupChatDemo {
         });
 
         GroupChat groupChat = new GroupChat(messageBus);
-        groupChat.setRoutingStrategy(GroupChat.RoutingStrategy.ROUND_ROBIN);
+        groupChat.setSelector(new org.flexagent.core.orchestration.RoundRobinSpeakerSelector());
 
         // Add some dummy agent profiles
         groupChat.addAgent(new AgentProfile("Alice", "Data Analyst", "You analyze data.", Collections.emptyList()));

@@ -85,7 +85,7 @@ public class MultiAgentTest {
         messageBus.subscribe(received::add);
 
         org.flexagent.core.orchestration.GroupChat groupChat = new org.flexagent.core.orchestration.GroupChat(messageBus);
-        groupChat.setRoutingStrategy(org.flexagent.core.orchestration.GroupChat.RoutingStrategy.ROUND_ROBIN);
+        groupChat.setSelector(new org.flexagent.core.orchestration.RoundRobinSpeakerSelector());
 
         AgentNode nodeA = new MockAgentNode("AgentA", "Desc A", "Reply A");
         AgentNode nodeB = new MockAgentNode("AgentB", "Desc B", "Reply B");

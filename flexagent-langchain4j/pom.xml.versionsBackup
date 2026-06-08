@@ -3,46 +3,53 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>org.flexagent</groupId>
         <artifactId>flexagent-parent</artifactId>
-        <version>1.3.0</version>
+        <version>1.2.0</version>
     </parent>
 
-    <artifactId>flexagent-mcp</artifactId>
-    <name>FlexAgent MCP Adapter</name>
-    <description>Model Context Protocol Support for FlexAgent</description>
+    <artifactId>flexagent-langchain4j</artifactId>
+    <packaging>jar</packaging>
+
+    <name>FlexAgent LangChain4j Adapter</name>
+    <description>LangChain4j model and tool execution adapter layer</description>
 
     <dependencies>
+        <!-- Core abstractions -->
         <dependency>
             <groupId>org.flexagent</groupId>
             <artifactId>flexagent-core</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
+        <!-- LangChain4j Core -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
         </dependency>
 
+        <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
+        <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
+            <groupId>org.flexagent</groupId>
+            <artifactId>flexagent-localharness</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
