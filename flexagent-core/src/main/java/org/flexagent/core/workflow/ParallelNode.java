@@ -30,9 +30,14 @@ public class ParallelNode implements WorkflowNode {
     @Override
     public String execute(WorkflowState state) {
         List<CompletableFuture<String>> futures = new ArrayList<>();
+        java.util.concurrent.ExecutorService executor = state.getExecutorService();
         
         for (WorkflowNode task : parallelTasks) {
-            futures.add(CompletableFuture.supplyAsync(() -> task.execute(state)));
+            if (executor != null) {
+                futures.add(CompletableFuture.supplyAsync(() -> task.execute(state), executor));
+            } else {
+                futures.add(CompletableFuture.supplyAsync(() -> task.execute(state)));
+            }
         }
         
         CompletableFuture<Void> allDone = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));

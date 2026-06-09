@@ -13,6 +13,7 @@ public class WorkflowState implements Serializable {
     private String currentNodeId;
     private boolean isFinished;
     private String finalResult;
+    private transient java.util.concurrent.ExecutorService executorService;
 
     public WorkflowState(String workflowId) {
         this.workflowId = workflowId;
@@ -35,4 +36,7 @@ public class WorkflowState implements Serializable {
 
     public String getFinalResult() { return finalResult; }
     public void setFinalResult(String finalResult) { this.finalResult = finalResult; }
+
+    public java.util.concurrent.ExecutorService getExecutorService() { return executorService; }
+    public void setExecutorService(java.util.concurrent.ExecutorService executorService) { this.executorService = executorService; }
 }

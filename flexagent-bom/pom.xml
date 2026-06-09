@@ -17,47 +17,47 @@
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-core</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-localharness</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-langchain4j</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-spring-ai</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-mcp</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-rag</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-spring-boot-starter</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-web-console</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
             <dependency>
                 <groupId>org.flexagent</groupId>
                 <artifactId>flexagent-benchmark</artifactId>
-                <version>1.4.0</version>
+                <version>1.5.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

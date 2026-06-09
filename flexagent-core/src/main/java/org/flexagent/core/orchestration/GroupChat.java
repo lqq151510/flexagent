@@ -8,9 +8,9 @@ import java.util.List;
 public class GroupChat {
     
     private final List<AgentProfile> agents = new ArrayList<>();
-    private final List<AgentNode> agentNodes = new ArrayList<>();
+    private final List<AgentNode> agentNodes = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final MessageBus messageBus;
-    private final List<GroupChatMessage> history = new ArrayList<>();
+    private final List<GroupChatMessage> history = new java.util.concurrent.CopyOnWriteArrayList<>();
     private org.flexagent.core.observation.AgentObservationRegistry observationRegistry = org.flexagent.core.observation.AgentObservationRegistry.NOOP;
     
     private NextSpeakerSelector selector = new RoundRobinSpeakerSelector();

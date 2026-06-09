@@ -10,9 +10,15 @@ import java.util.Map;
 public class WorkflowOrchestrator {
     private final Map<String, WorkflowNode> nodes = new HashMap<>();
     private final CheckpointManager checkpointManager;
+    private java.util.concurrent.ExecutorService executorService;
 
     public WorkflowOrchestrator(CheckpointManager checkpointManager) {
         this.checkpointManager = checkpointManager;
+        this.executorService = java.util.concurrent.Executors.newCachedThreadPool();
+    }
+
+    public void setExecutorService(java.util.concurrent.ExecutorService executorService) {
+        this.executorService = executorService;
     }
 
     public void addNode(WorkflowNode node) {
@@ -35,6 +41,12 @@ public class WorkflowOrchestrator {
                 state.getContextVariables().putAll(initialContext);
             }
         }
+        
+        state.setExecutorService(this.executorService);
+        
+        if (checkpointManager != null) {
+            checkpointManager.save(state);
+        }
 
         while (!state.isFinished() && state.getCurrentNodeId() != null) {
             String currentNodeId = state.getCurrentNodeId();
@@ -44,24 +56,29 @@ public class WorkflowOrchestrator {
             }
 
             // Execute the node
-            String result = node.execute(state);
+            try {
+                String result = node.execute(state);
 
-            // Determine next node (For simplicity in this engine, we assume sequential flow or parallel divergence that converges back if specified)
-            List<String> nextIds = node.getNextNodeIds();
-            if (nextIds == null || nextIds.isEmpty()) {
-                state.setFinished(true);
-                state.setFinalResult(result);
-                state.setCurrentNodeId(null);
-            } else {
-                // If there's multiple next IDs from a non-parallel node, it could imply a split, 
-                // but our simple Orchestrator moves sequentially to the first configured next node.
-                // Complex splits should use ParallelNode which internalizes the divergence.
-                state.setCurrentNodeId(nextIds.get(0));
-            }
+                // Determine next node
+                List<String> nextIds = node.getNextNodeIds();
+                if (nextIds == null || nextIds.isEmpty()) {
+                    state.setFinished(true);
+                    state.setFinalResult(result);
+                    state.setCurrentNodeId(null);
+                } else {
+                    state.setCurrentNodeId(nextIds.get(0));
+                }
 
-            // Save checkpoint after each node execution
-            if (checkpointManager != null) {
-                checkpointManager.save(state);
+                // Save checkpoint after each node execution
+                if (checkpointManager != null) {
+                    checkpointManager.save(state);
+                }
+            } catch (Exception e) {
+                // Save state even on crash so failover node can inspect or retry if policy allows
+                if (checkpointManager != null) {
+                    checkpointManager.save(state);
+                }
+                throw e;
             }
         }
 

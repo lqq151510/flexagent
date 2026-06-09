@@ -6,7 +6,7 @@
 
     <groupId>org.flexagent</groupId>
     <artifactId>flexagent-parent</artifactId>
-    <version>1.4.0</version>
+    <version>1.5.0</version>
     <packaging>pom</packaging>
 
     <name>FlexAgent Java SDK Parent</name>
@@ -24,6 +24,8 @@
         <module>flexagent-examples</module>
         <module>flexagent-web-console</module>
         <module>flexagent-benchmark</module>
+        <module>flexagent-enterprise-tests</module>
+        <module>flexagent-spring-cloud-starter</module>
     </modules>
 
     <properties>
